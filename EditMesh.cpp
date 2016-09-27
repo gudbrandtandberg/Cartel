@@ -1744,13 +1744,13 @@ bool EditMesh::loop_subdivide() {
 		}
 		if (m_heData[h].next == HOLE_INDEX) {
 			next_counter++;
-			(&m_heData[h])->next = 0;
+			//(&m_heData[h])->next = 0;
 		}
 	}
 	std::cout << "There are " << twin_counter << " halfedges without a twin" << std::endl;
 	std::cout << "There are " << next_counter << " halfedges without a next" << std::endl;
 
-//	this->verify();
+	//this->verify();
 
     edit_count++;
     return true;

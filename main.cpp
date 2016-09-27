@@ -53,17 +53,19 @@ DrawMesh *g_axis; // NOTE: only a single axis
 
 // === Mesh Files ===
 int mesh_curr = -1;
-int mesh_file_size = 5; // size of the array below
-const char *mesh_files[] = {"Mesh/cube.obj",
+int mesh_file_size = 6; // size of the array below
+const char *mesh_files[] = {"Mesh/tetrahedron.obj",
+                            "Mesh/cube.obj",
 							"Mesh/icosahedron.obj",
 							"Mesh/sphere.obj", 
-                            "Mesh/meshObj.obj",
-                            "Collapse-2Ring.obj"};
+                            "Mesh/diamond.obj",
+                            "Mesh/humanoid.obj"
+                            };
 
 
 // main loop, does everything: poll events, update world, render
 void mainloop() {
-	glfwPollEvents();
+	glfwWaitEvents();
 
 	ImGui_ImplGlfwGL3_NewFrame();
 	if (ImGui::BeginMainMenuBar()) {
