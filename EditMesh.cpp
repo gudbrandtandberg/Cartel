@@ -1635,7 +1635,7 @@ bool EditMesh::loop_subdivide() {
 		
 		he_index odd_halfedge_indices[3];
 		vertex_index odd_vert_indices[3];
-		//update old boundrary half_edges, create new (odd) boundary halfedges and insert new (odd) vertices
+		//update old (even) boundrary halfedges, create new (odd) boundary halfedges and insert new (odd) vertices
 		for (edge_counter = 0; edge_counter<3; edge_counter++) {
 			he_index origin_i = even_halfedge_indices[edge_counter];
 			if (already_split.find(origin_i) == already_split.end()) { //this edge is untouched
@@ -1670,14 +1670,16 @@ bool EditMesh::loop_subdivide() {
 			} else {
 				odd_halfedge_indices[edge_counter] = m_heData.size();
 				half_edge new_he = {};
-				
+				he_index new_he_i;
 				detail::init(new_he, m_heData[origin_i].next,
 									 m_heData[origin_i].twin,
 								     new_odd_v_indices[origin_i], 
 									 new_faces[(edge_counter+1)%3]);
+				new_he_i = m_heData.size();
 				m_heData.push_back(new_he);
 
 				half_edge *origin = &m_heData[origin_i];
+				(&m_heData[origin->twin])->twin = new_he_i;
 				origin->next = HOLE_INDEX; //perhaps wait with this?
 				origin->face = new_faces[edge_counter];
 				origin->twin = twin_info[origin_i];
@@ -1742,10 +1744,13 @@ bool EditMesh::loop_subdivide() {
 		}
 		if (m_heData[h].next == HOLE_INDEX) {
 			next_counter++;
+			(&m_heData[h])->next = 0;
 		}
 	}
 	std::cout << "There are " << twin_counter << " halfedges without a twin" << std::endl;
 	std::cout << "There are " << next_counter << " halfedges without a next" << std::endl;
+
+//	this->verify();
 
     edit_count++;
     return true;
