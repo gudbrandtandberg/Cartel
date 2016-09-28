@@ -1561,7 +1561,7 @@ bool EditMesh::loop_subdivide() {
 
 				//then the 'adjacent' two (weight 1)
 				new_pos += this->get_vertex(m_heData[he_next.next].vert);
-				new_pos += this->get_vertex(m_heData[he_twin.next].vert);
+				new_pos += this->get_vertex(m_heData[m_heData[he_twin.next].next].vert);
 
 				//normalize and save
 				new_pos /= 8;
