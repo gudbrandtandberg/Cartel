@@ -108,37 +108,29 @@ public:
      ************************************/
 public:
     /********************************
-     * CS524_INPUT FUNCTIONALITY GOES HERE
-     *
-     * WARNING! WHEN USING EIGEN MAKE SURE
-     * you check the results of the solve
-     * by simply re-multiplying the solution
-     * and your matrix to make sure it equals
-     * your desired solution.
-     *
-     * There have been past Eigen bugs
-     * where this did not always hold.
+     * Gudbrand's code
+     * 
+	 * Assignment 1: Loop Subdivision
+	 * 
+	 * 
      ********************************/
 	
-
-	
+	//main loop subdivide & subroutines
 	bool loop_subdivide();
-	void print_face(face_index f);
-	void print_mesh_data(std::string title);
 	std::vector<Eigen::Vector3d> compute_even_positions();
 	std::vector<Eigen::Vector3d> compute_odd_positions();
 	void set_even_positions(std::vector<Eigen::Vector3d> positions); 
-	
 	void update_mesh(std::vector<Eigen::Vector3d> new_odd_positions);
-
+	
+	//general mesh-related
 	void test_mesh();
-
-
-	void example();
+	void print_face(face_index f);
+	void print_mesh_data(std::string title);
 
     /*================================================
      * Iterator functions
      *================================================*/
+	 void example();
 public:
 	/**
 	 * Initialize an iterator that visits the 1-ring of 'vertex'.
