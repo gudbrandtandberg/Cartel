@@ -1719,9 +1719,6 @@ bool EditMesh::loop_subdivide() {
 			origin = &m_heData[origin_i]; //need to 'refresh' for some reason; learn about this!
 			origin->next = new_he1_i;
 
-			if (f-1 == 2) {
-				std::cout << odd_vert_indices[0] << odd_vert_indices[1] << odd_vert_indices[2] << std::endl;
-			}
 		}
 
 		//connect the newly created 'inner' halfedges in a 'next-cycle'
