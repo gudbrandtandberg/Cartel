@@ -22,6 +22,10 @@
 
 //#define USE_PREV
 
+typedef size_t face_index;   
+typedef size_t vertex_index;
+typedef size_t he_index;
+
 const std::size_t HOLE_INDEX = static_cast<std::size_t>( -1 );
 
 struct half_edge{
@@ -115,6 +119,8 @@ public:
      * where this did not always hold.
      ********************************/
 	bool loop_subdivide();
+	void print_face(face_index f);
+
 	void example();
 
     /*================================================

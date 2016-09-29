@@ -27,11 +27,6 @@
 #include <memory>
 #include <fstream>
 
-
-typedef size_t face_index;   
-typedef size_t vertex_index;
-typedef size_t he_index;
-
 //#if defined(NDEBUG) && defined(ALWAYS_ASSERT)
 //#undef NDEBUG
 //#endif
@@ -1248,6 +1243,10 @@ void EditMesh::verify() const {
 		assert( it->twin < m_heData.size() );
 		assert( m_heData[it->twin].twin == i );
 		assert( m_heData[it->twin].face != it->face );
+
+		if (m_heData[it->twin].vert != m_heData[it->next].vert) {
+			std::cout << "halfedge " << i << " has problems.." << std::endl;
+		}
 		assert( m_heData[it->twin].vert == m_heData[it->next].vert );
 
 #ifdef USE_PREV
@@ -1502,9 +1501,10 @@ bool EditMesh::is_safe_addface( std::size_t v1, std::size_t v2, std::size_t v3 )
 //my function for refining a mesh using the Loop-scheme.
 bool EditMesh::loop_subdivide() {
 
-	std::cout << "Number of faces: " << m_faceData.size() << std::endl;
-	std::cout << "Number of vertices " << m_vertData.size() << std::endl;
-	std::cout << "Number of halfedges " << m_heData.size() << std::endl;
+	std::cout << "Starting Loop subdivision.\nOriginal mesh has "
+	<< m_faceData.size() << " faces, "
+	<< m_vertData.size() << " vertices, "
+	<< "and " << m_heData.size() << " halfedges.\n" << std::endl;
 
     //first, go through old vertices and compute & store their new positions
     std::vector<Eigen::Vector3d> new_even_positions(m_vertData.size());
@@ -1566,10 +1566,11 @@ bool EditMesh::loop_subdivide() {
 				//normalize and save
 				new_pos /= 8;
 				new_odd_positions[he_ind] = new_pos;
+				new_odd_positions[m_heData[he_ind].twin] = new_pos;
 				
 				already_split.insert(he.twin);
 			} else { //the new vertex position has been computed in neighbor-face
-				new_odd_positions[he_ind] = new_odd_positions[he.twin]; //sub-optimal.. fix?
+				//new_odd_positions[he_ind] = new_odd_positions[he.twin]; //sub-optimal.. fix?
 			}
 			
 			he_ind = m_heData[he_ind].next;
@@ -1669,8 +1670,10 @@ bool EditMesh::loop_subdivide() {
 			
 			} else {
 				odd_halfedge_indices[edge_counter] = m_heData.size();
+				odd_vert_indices[edge_counter] = new_odd_v_indices[origin_i];
 				half_edge new_he = {};
 				he_index new_he_i;
+
 				detail::init(new_he, m_heData[origin_i].next,
 									 m_heData[origin_i].twin,
 								     new_odd_v_indices[origin_i], 
@@ -1713,7 +1716,12 @@ bool EditMesh::loop_subdivide() {
 			m_heData.push_back(new_he1);
 			m_heData.push_back(new_he2);
 
+			origin = &m_heData[origin_i]; //need to 'refresh' for some reason; learn about this!
 			origin->next = new_he1_i;
+
+			if (f-1 == 2) {
+				std::cout << odd_vert_indices[0] << odd_vert_indices[1] << odd_vert_indices[2] << std::endl;
+			}
 		}
 
 		//connect the newly created 'inner' halfedges in a 'next-cycle'
@@ -1736,22 +1744,25 @@ bool EditMesh::loop_subdivide() {
 	std::cout << "Number of vertices " << m_vertData.size() << std::endl;
 	std::cout << "Number of halfedges " << m_heData.size() << std::endl;
 
-	std::cout << "Sanity checks:" << std::endl;
-	int twin_counter = 0, next_counter = 0;
-	for (he_index h=0; h<m_heData.size(); h++) {
-		if (m_heData[h].twin == HOLE_INDEX) {
-			twin_counter++;
-		}
-		if (m_heData[h].next == HOLE_INDEX) {
-			next_counter++;
-			//(&m_heData[h])->next = 0;
-		}
-	}
-	std::cout << "There are " << twin_counter << " halfedges without a twin" << std::endl;
-	std::cout << "There are " << next_counter << " halfedges without a next" << std::endl;
-
-	//this->verify();
+	this->verify();
 
     edit_count++;
     return true;
+}
+
+void EditMesh::print_face(face_index f) {
+
+	he_index he[3];
+	he_index current = m_faceData[f];
+	int i = 1;
+	he[0] = m_faceData[f];
+	do {
+		he[i] = m_heData[current].next;
+		current = he[i];
+		i++;
+	} while (current != he[0]);
+
+	std::cout << "Face " << f << " is bounded by halfedges " << he[0] << ", " << he[1] << ", " << he[2] << std::endl; 
+
+	return; 
 }

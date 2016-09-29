@@ -169,6 +169,9 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     case GLFW_KEY_N:
         if (action == GLFW_RELEASE) c_state.view_mode = c_state.view_mode + 1 > VIEW_ALL ? VIEW_FACES : c_state.view_mode + 1;
         break;
+    case GLFW_KEY_G:
+        if (action == GLFW_RELEASE) c_state.op = EDIT_LOOP_SUBDIV;
+        break;
 	case GLFW_KEY_F:
 		if (action == GLFW_RELEASE) c_state.view_mode ^= VIEW_FACES;
 		break;
