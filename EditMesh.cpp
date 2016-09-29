@@ -26,6 +26,7 @@
 #include <iostream>
 #include <memory>
 #include <fstream>
+#include <string>
 
 //#if defined(NDEBUG) && defined(ALWAYS_ASSERT)
 //#undef NDEBUG
@@ -35,6 +36,9 @@
 EditMesh *loadEditMeshFromFile(std::string file_name);
 
 namespace detail{
+	void foo() {
+		;
+	}
 	inline void init( half_edge& he, std::size_t next, std::size_t twin, std::size_t vert, std::size_t face ){
 		he.next = next;
 		he.twin = twin;
@@ -1498,15 +1502,22 @@ bool EditMesh::is_safe_addface( std::size_t v1, std::size_t v2, std::size_t v3 )
     //       (v3 != HOLE_INDEX && v1 != HOLE_INDEX);
 }
 
-//my function for refining a mesh using the Loop-scheme.
-bool EditMesh::loop_subdivide() {
 
-	std::cout << "Starting Loop subdivision.\nOriginal mesh has "
-	<< m_faceData.size() << " faces, "
-	<< m_vertData.size() << " vertices, "
-	<< "and " << m_heData.size() << " halfedges.\n" << std::endl;
+namespace utility {
+	
+}
 
-    //first, go through old vertices and compute & store their new positions
+void EditMesh::print_mesh_data(std::string title) {
+		std::cout << title << std::endl;
+		std::cout << "Vertices: " << m_vertData.size() << std::endl;
+		std::cout << "Faces: " << m_faceData.size() << std::endl;
+		std::cout << "Halfedges: " << m_heData.size() << std::endl;
+}
+
+
+
+std::vector<Eigen::Vector3d> EditMesh::compute_even_positions() {
+//first, go through old vertices and compute & store their new positions
     std::vector<Eigen::Vector3d> new_even_positions(m_vertData.size());
 	double valence, w_n;
 	vertex_index neighbor;
@@ -1535,7 +1546,10 @@ bool EditMesh::loop_subdivide() {
 
         new_even_positions[v] = new_pos;
     }
+	return new_even_positions;
+}
 
+std::vector<Eigen::Vector3d> EditMesh::compute_odd_positions() {
 	//1st face loop
 	face_index f;
 	he_index he_ind;
@@ -1544,7 +1558,7 @@ bool EditMesh::loop_subdivide() {
 	Eigen::Vector3d new_pos;
 	std::set<he_index> already_split;
 	//mapping from old halfedges to the new vertex being generated on this halfedge
-	std::map<he_index, Eigen::Vector3d> new_odd_positions; //could be simple std::vector?
+	std::vector<Eigen::Vector3d> new_odd_positions (m_heData.size());
 	for (f = 0; f < m_faceData.size(); f++) {
 		he_ind = m_faceData[f]; //first halfedge of the face
 		do {
@@ -1576,42 +1590,48 @@ bool EditMesh::loop_subdivide() {
 			he_ind = m_heData[he_ind].next;
 		} while (he_ind != m_faceData[f]);
 	}
+	return new_odd_positions;
+}
 
-	already_split.clear();  //we will use this one again
-	
-	//set the new even vertex positions (safe now that we have the odd vertex positions)
-    for (vertex_index v=0; v < m_vertData.size(); v++) {
-        this->set_vertex(v, new_even_positions[v]);
+void EditMesh::set_even_positions(std::vector<Eigen::Vector3d> positions) {
+	for (vertex_index v=0; v < m_vertData.size(); v++) {
+        this->set_vertex(v, positions[v]);
 	}
+}
 
-	/*           THE CRITICAL PART
+/*          
+* update_mesh() - THE CRITICAL PART
+*
+*	This is the loop where we update the mesh and force the connectivity.
+*	For each of the faces we walk along the boundary halfedges of the face.
+*	We treat the current halfedge (origin) in one of two ways:
+*		if we have not already split it's twin; 
+*			insert a new vertex, then modify the halfedge and insert a new half_edge
+*		if we have already split it's twin; 
+*			modify the halfedge and insert a new half_edge (using twin's info')
+*				
+*
+*						  *			    \   origin.twin
+*						/ 	 \           \
+*					   /	  \   ----	  \
+*					  /		   \ __new_he  \
+*		             /			\		    *
+*					/	  f      *			 \
+*				   /			  \   ----    \
+*				  /				   \		   \
+*				 /				    \			\
+*				*— — — — — — — — — — *  origin   
+*
+*/
 
-		This is the loop where we update the mesh and force the connectivity.
-		For each of the faces we walk along the boundary halfedges of the face.
-		We treat the current halfedge (origin) in one of two ways:
-			if we have not already split it's twin; 
-				insert a new vertex, then modify the halfedge and insert a new half_edge
-			if we have already split it's twin; 
-				modify the halfedge and insert a new half_edge (using twin's info')
-				
-
-						  *			    \   origin.twin
-						/ 	 \           \
-					   /	  \   ----	  \
-					  /		   \ __new_he  \
-		             /			\		    *
-					/	  f      *			 \
-				   /			  \   ----    \
-				  /				   \		   \
-				 /				    \			\
-				*— — — — — — — — — — *  origin   
-
-	*/
-
-	//2nd face loop - add new faces, verts and connectivity - face by face
+void EditMesh::update_mesh(std::vector<Eigen::Vector3d> new_odd_positions) {
+	int edge_counter;face_index f;
+	std::set<he_index> already_split;
 	size_t num_original_faces = m_faceData.size();   //this will change
 	std::map<he_index, vertex_index> new_odd_v_indices;   //as we add vertices, we save their indices
 	std::map<he_index, he_index> twin_info;	//to pass he-info from twin to twin
+	
+	//2nd face loop - add new faces, verts and connectivity - face by face
 	for (f=num_original_faces; f > 0; f--) {
 		//first, store the even halfedge & vertex indices
 		he_index even_halfedge_indices[3];
@@ -1632,10 +1652,9 @@ bool EditMesh::loop_subdivide() {
 		face_index new_face_2 = new_face_1 + 1;
 		face_index new_faces[] = {new_face_0, new_face_1, new_face_2};
 		face_index old_face = f-1;
-
-		
 		he_index odd_halfedge_indices[3];
 		vertex_index odd_vert_indices[3];
+		
 		//update old (even) boundrary halfedges, create new (odd) boundary halfedges and insert new (odd) vertices
 		for (edge_counter = 0; edge_counter<3; edge_counter++) {
 			he_index origin_i = even_halfedge_indices[edge_counter];
@@ -1662,12 +1681,12 @@ bool EditMesh::loop_subdivide() {
 
 				//update what we can of the origin halfedge
 				half_edge *origin = &m_heData[origin_i];
-				origin->next = HOLE_INDEX; //perhaps wait with this?
+				origin->next = HOLE_INDEX; //is set l8r!
 				origin->face = new_faces[edge_counter];
 
 				already_split.insert(origin->twin);
 				twin_info[origin->twin] = new_he_i;
-			
+
 			} else {
 				odd_halfedge_indices[edge_counter] = m_heData.size();
 				odd_vert_indices[edge_counter] = new_odd_v_indices[origin_i];
@@ -1682,8 +1701,8 @@ bool EditMesh::loop_subdivide() {
 				m_heData.push_back(new_he);
 
 				half_edge *origin = &m_heData[origin_i];
-				(&m_heData[origin->twin])->twin = new_he_i;
-				origin->next = HOLE_INDEX; //perhaps wait with this?
+				m_heData[origin->twin].twin = new_he_i;
+				origin->next = HOLE_INDEX;
 				origin->face = new_faces[edge_counter];
 				origin->twin = twin_info[origin_i];
 			}
@@ -1692,8 +1711,10 @@ bool EditMesh::loop_subdivide() {
 		//six more halfedges in the middle, add them 'twinwise'
 		he_index new_he_indices[6];
 		for (edge_counter=0; edge_counter<3; edge_counter++) {
+			
 			he_index origin_i = even_halfedge_indices[edge_counter];
 			half_edge *origin = &m_heData[origin_i];
+			
 			half_edge new_he1 = {};
 			half_edge new_he2 = {};
 
@@ -1713,12 +1734,9 @@ bool EditMesh::loop_subdivide() {
 								  odd_vert_indices[(edge_counter+2)%3],
 								  old_face);
 
+			origin->next = new_he1_i;
 			m_heData.push_back(new_he1);
 			m_heData.push_back(new_he2);
-
-			origin = &m_heData[origin_i]; //need to 'refresh' for some reason; learn about this!
-			origin->next = new_he1_i;
-
 		}
 
 		//connect the newly created 'inner' halfedges in a 'next-cycle'
@@ -1735,15 +1753,41 @@ bool EditMesh::loop_subdivide() {
 		m_faceData.push_back(even_halfedge_indices[2]);
 		m_faceData[old_face] = new_he_indices[1];  //..and the old!
 	}
+}
 
-	std::cout << "Subdivision should be finished.. Post mortem:\n";
-	std::cout << "Number of faces: " << m_faceData.size() << std::endl;
-	std::cout << "Number of vertices " << m_vertData.size() << std::endl;
-	std::cout << "Number of halfedges " << m_heData.size() << std::endl;
+void EditMesh::test_mesh() {
+	try {
+		this->verify();
+	} catch (...) {
+		std::cout << "ERROR: Mesh is corrupted!" << std::endl;
+		exit(-1);
+	}
+}
 
-	this->verify();
+/*
+* loop_subdivide()
+*
+* my function for sudividing a mesh using the Loop-scheme.
+* only handles closed triangular meshes
+* press 'g' to activate from a Cartel session
+*/
 
-    edit_count++;
+bool EditMesh::loop_subdivide() {
+
+	//print_mesh_data("Starting Loop subdivision.\nOriginal mesh has");
+
+	//Start with computing new vertex positions using Loop's equation
+	std::vector<Eigen::Vector3d> new_even_positions = compute_even_positions();
+	std::vector<Eigen::Vector3d> new_odd_positions = compute_odd_positions();
+	set_even_positions(new_even_positions);
+
+	//Then update the mesh data and connectivity
+	update_mesh(new_odd_positions);
+
+	//mesh subdivision is done, finish off
+	//print_mesh_data("Subdivision was successfull.. Post mortem:");
+    
+	edit_count++;
     return true;
 }
 

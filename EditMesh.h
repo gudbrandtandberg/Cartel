@@ -19,7 +19,8 @@
 
 #include <cstdlib>
 #include <vector>
-
+#include <string>
+#include <map>
 //#define USE_PREV
 
 typedef size_t face_index;   
@@ -118,8 +119,20 @@ public:
      * There have been past Eigen bugs
      * where this did not always hold.
      ********************************/
+	
+
+	
 	bool loop_subdivide();
 	void print_face(face_index f);
+	void print_mesh_data(std::string title);
+	std::vector<Eigen::Vector3d> compute_even_positions();
+	std::vector<Eigen::Vector3d> compute_odd_positions();
+	void set_even_positions(std::vector<Eigen::Vector3d> positions); 
+	
+	void update_mesh(std::vector<Eigen::Vector3d> new_odd_positions);
+
+	void test_mesh();
+
 
 	void example();
 
