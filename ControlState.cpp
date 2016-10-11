@@ -35,8 +35,8 @@ int ControlState::init(WorldState &w)
 {
     this->w = &w;
 
-    width  = 800;
-    height = 600;
+    width  = 1000;
+    height = 800;
     /* As of right now we only have one window */
     window = glfwCreateWindow(width, height, "Cartel", NULL, NULL);
     if (!window)
@@ -73,7 +73,7 @@ void ControlState::clearViewDeltas()
 {
     viewTheta = 0;
     viewPhi   = 0;
-    viewDepth = 0;
+    viewDepth = 0.2f;
     viewPan   = glm::vec3(0, 0, 0);
 }
 
@@ -129,6 +129,13 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
     switch(key)
     {
+    case GLFW_KEY_G:
+        if (action == GLFW_RELEASE) c_state.op = EDIT_LOOP_SUBDIV;
+        break;
+    case GLFW_KEY_O:
+        if (action == GLFW_RELEASE) c_state.op = EDIT_SIMPLIFIY_VERTEX_REMOVAL;
+        break;
+
     case GLFW_KEY_LEFT:
         c_state.arrL = (action == GLFW_RELEASE) ? 0 : 1;
         break;
@@ -169,9 +176,6 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     case GLFW_KEY_N:
         if (action == GLFW_RELEASE) c_state.view_mode = c_state.view_mode + 1 > VIEW_ALL ? VIEW_FACES : c_state.view_mode + 1;
         break;
-    case GLFW_KEY_G:
-        if (action == GLFW_RELEASE) c_state.op = EDIT_LOOP_SUBDIV;
-        break;
 	case GLFW_KEY_F:
 		if (action == GLFW_RELEASE) c_state.view_mode ^= VIEW_FACES;
 		break;
@@ -184,6 +188,9 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 	case GLFW_KEY_A:
 		if (action == GLFW_RELEASE) c_state.view_axis = !c_state.view_axis;
 		break;
+	case GLFW_KEY_R:
+		if (action == GLFW_RELEASE) c_state.clearViewDeltas();
+		break;
 
 	case GLFW_KEY_C:
 		if (action == GLFW_RELEASE) c_state.op = EDIT_CLEAR_SELECTION;
@@ -193,9 +200,6 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 			c_state.op = EDIT_DEBUG;
 		break;
 
-    case GLFW_KEY_0:
-		if (action == GLFW_RELEASE) { c_state.op = EDIT_SQRT3_SUBDIV; }
-        break;
 	case GLFW_KEY_1:
 		if (action == GLFW_RELEASE) {}
 		break;
@@ -267,13 +271,13 @@ static void mousePos_callback(GLFWwindow* win, double x, double y)
     
         if (c_state.modShft) // update screen pan
         {
-            float perc = 50 / c_state.viewDepth;
+            float perc = 100 / c_state.viewDepth;
             c_state.viewPan = c_state.viewPan + glm::vec3(dx / perc, dy / perc, 0);
         }
         else // Update viewing angles.
         {
-            c_state.viewTheta = fmod(c_state.viewTheta + 360.0f + dx / 2.0f, 360.0f);
-            c_state.viewPhi   = std::min(90.0f, std::max(-90.0f, c_state.viewPhi - dy));
+            c_state.viewTheta = std::fmod(c_state.viewTheta + glm::radians(360.0f) + dx / 100 / 2.0f, glm::radians(360.0f));
+            c_state.viewPhi   = std::min(glm::radians(90.0f), std::max(glm::radians(-90.0f), c_state.viewPhi - dy / 100));
         }
     }
 

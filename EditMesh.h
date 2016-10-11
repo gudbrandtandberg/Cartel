@@ -21,11 +21,13 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <queue>
 //#define USE_PREV
 
 typedef size_t face_index;   
 typedef size_t vertex_index;
 typedef size_t he_index;
+typedef std::pair<vertex_index, float> v_error_pair;
 
 const std::size_t HOLE_INDEX = static_cast<std::size_t>( -1 );
 
@@ -73,6 +75,7 @@ private:
 };
 
 class EditMesh{
+	
 public:
 	EditMesh();
 
@@ -114,15 +117,35 @@ public:
 	 * 
 	 * 
      ********************************/
-	
-	//main loop subdivide & subroutines
+
+	struct ComparePair {
+		public:
+		bool operator()(std::pair<vertex_index, float> lhs, std::pair<vertex_index, float> rhs) {
+			return lhs.second > rhs.second;
+		}
+
+	};
+
+	//"Loop"" subdivide & subroutines
 	bool loop_subdivide();
 	std::vector<Eigen::Vector3d> compute_even_positions();
 	std::vector<Eigen::Vector3d> compute_odd_positions();
 	void set_even_positions(std::vector<Eigen::Vector3d> positions); 
 	void update_mesh(std::vector<Eigen::Vector3d> new_odd_positions);
+
+	//Vertex removal simplification
+    void simplify_vertex_removal(int number_operations); 
+    void compute_angle_errors();
+	void sort_angle_errors();
+	bool remove_vertex(vertex_index v);
+
 	
-	//general mesh-related
+	std::vector<v_error_pair> vertex_angle_errors;
+
+	//Edge collapse simplification
+	void simplify_edge_collapse(int number_operations); 
+
+    //general mesh-related
 	void test_mesh();
 	void print_face(face_index f);
 	void print_mesh_data(std::string title);
@@ -204,6 +227,7 @@ public:
     void get_draw_data( float *verts, int *indices ) const;
     void get_draw_normals( float *normals ) const;
     void get_draw_selection( int *selection ) const;
+    void get_draw_colors( float *colors) const;
     int  get_edit_count() const;
     void get_face_neighbors(int face_index, size_t neighbors[3]);
 	void flag_edited();
@@ -274,14 +298,12 @@ public:
      *****************************************/
 private:
 	friend class mesh_adjacency;
-
 	int edit_count; // increment this value every change
 
 	// TODO: Switch to std::deque to avoid pointer invalidation when adding new half-edges.
 	std::vector< half_edge > m_heData;     // All the half-edges that make up the mesh.
-	std::vector< std::size_t > m_faceData; // A mapping from face index to an arbitrary half-edge on its boundary.
-	std::vector< std::size_t > m_vertData; // A mapping from vertex index to an arbitrary half-edge originating from this vertex. Can be "HOLE_INDEX" for unconnected vertices.
-	
+	std::vector< face_index > m_faceData; // A mapping from face index to an arbitrary half-edge on its boundary.
+	std::vector< vertex_index > m_vertData; // A mapping from vertex index to an arbitrary half-edge originating from this vertex. Can be "HOLE_INDEX" for unconnected vertices.
     std::vector< bool > m_selected; // if a vertex is selected or not
 	std::vector< Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > m_vertices;
 	

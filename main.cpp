@@ -23,6 +23,10 @@
 
 #include <stdio.h>
 #include <math.h>
+
+#ifndef GLM_FORCE_RADIANS 
+#define GLM_FORCE_RADIANS 
+#endif
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -53,20 +57,29 @@ DrawMesh *g_axis; // NOTE: only a single axis
 
 // === Mesh Files ===
 int mesh_curr = -1;
-int mesh_file_size = 7; // size of the array below
-const char *mesh_files[] = {"Mesh/tetrahedron.obj",
-                            "Mesh/cube.obj",
-							"Mesh/icosahedron.obj",
-							"Mesh/sphere.obj", 
+int mesh_file_size = 13; // size of the array below
+const char *mesh_files[] = {"Mesh/camel.obj",
+                            "Mesh/icosahedron.obj",
+                            "Mesh/cow_head.obj",
+                            "Mesh/cow1.obj",
+							"Mesh/cow2.obj",
+							"Mesh/cube.obj",
+							"Mesh/horse.obj",
+							"Mesh/octopus.obj",
+                            "Mesh/tetrahedron.obj",
                             "Mesh/diamond.obj",
-                            "Mesh/humanoid.obj", 
-                            "Mesh/rabbit.obj"
-                            };
+                            "Mesh/rabbit.obj",
+                            "Mesh/diamond.obj",
+                            "Mesh/humanoid.obj",};
 
 
 // main loop, does everything: poll events, update world, render
 void mainloop() {
-	glfwWaitEvents();
+    
+	glfwPollEvents();
+
+	static bool simplify_window_open = true;
+	static int simplify_n_operations = 1;
 
 	ImGui_ImplGlfwGL3_NewFrame();
 	if (ImGui::BeginMainMenuBar()) {
@@ -89,6 +102,7 @@ void mainloop() {
 
 		if (ImGui::BeginMenu("View")) {
 			if (ImGui::MenuItem("Next", "N")) { c_state.view_mode = c_state.view_mode + 1 > VIEW_ALL ? VIEW_FACES : c_state.view_mode + 1; }
+			if (ImGui::MenuItem("Reset View", "R")) { c_state.clearViewDeltas(); }
 			ImGui::Separator();
 			if (ImGui::MenuItem("Faces", "F", (c_state.view_mode & VIEW_FACES) > 0)) c_state.view_mode ^= VIEW_FACES;
 			if (ImGui::MenuItem("Edges", "E", (c_state.view_mode & VIEW_EDGES) > 0)) c_state.view_mode ^= VIEW_EDGES;
@@ -100,24 +114,33 @@ void mainloop() {
 		// CS 524: Feel free to edit and add entries below, remember that you also have to set keyboard events in ControlState.cpp (if you want them)
         if (ImGui::BeginMenu("Edit")) {
 			if (ImGui::MenuItem("Clear Selection", "C")) { c_state.op = EDIT_CLEAR_SELECTION; }
-            if (ImGui::MenuItem("Loop subdivide!", "1")) { c_state.op = EDIT_LOOP_SUBDIV; }
+			if (ImGui::MenuItem("Simplify", "O", simplify_window_open)) { simplify_window_open = !simplify_window_open; }
+            if (ImGui::MenuItem("Subdivide", "G")) { c_state.op = EDIT_LOOP_SUBDIV; }
             ImGui::EndMenu();
         }
 
 		// CS 524: You can also have buttons directly in the main bar
 //		if (ImGui::Button("Item6")) { printf("Item6 clicked\n"); }
-		ImGui::SameLine(ImGui::GetWindowWidth() - 80);
+		ImGui::SameLine(ImGui::GetWindowWidth() - '80');
 		ImGui::Text("(%.0f fps)", ImGui::GetIO().Framerate);
         ImGui::EndMainMenuBar();
     }
 
 	// CS 524: Or you can have a separate window
-	// ImGui::Begin("Debug Window");
-	// ImGui::Text("Hello, World");
-	// if (ImGui::Button("Test Button")) { printf("Clicked!\n"); }
-	// static char buf1[64] = ""; 
-	// ImGui::InputText("", buf1, 64);
-	// ImGui::End();
+	if (simplify_window_open) {
+		ImGui::Begin("Mesh Simplification");
+		// feel free to add more controls
+		ImGui::SliderInt("Number operations", &simplify_n_operations, 1, 100);
+		if (ImGui::Button("Vertex Removal Simplification")) {c_state.op = EDIT_SIMPLIFIY_VERTEX_REMOVAL; }
+		if (ImGui::Button("Edge Collapse Simplification")) { }
+		ImGui::End();
+	}
+	ImGui::Begin("Debug Window");
+	ImGui::Text("Hello, World");
+	if (ImGui::Button("Test Button")) { printf("Clicked!\n"); }
+	static char buf1[64] = ""; 
+	ImGui::InputText("", buf1, 64);
+	ImGui::End();
 	
     // Clear the buffer we will draw into.
     glClearColor(0.549f, 0.47f, 0.937f, 1.0f);
@@ -146,12 +169,22 @@ void mainloop() {
 		g_mesh->get_editMesh()->deselect_allVerts();
 		c_state.op = EDIT_NONE;
 		break;
+
+	case EDIT_SIMPLIFIY_VERTEX_REMOVAL:
+		g_mesh->get_editMesh()->simplify_vertex_removal(simplify_n_operations);
+		c_state.op = EDIT_NONE;
+		break;
+
+	case EDIT_SIMPLIFY_EDGE_COLLAPSE:
+		g_mesh->get_editMesh()->simplify_edge_collapse(simplify_n_operations);
+		c_state.op = EDIT_NONE;
+		break;
+
 	case EDIT_LOOP_SUBDIV:
+        std::cout<< "Hei\n";                
 		g_mesh->get_editMesh()->loop_subdivide();
 		c_state.op = EDIT_NONE;
-		// CS 524: you can add entry points for your functions here.
-		// Remember to set c_state.op either in ControlState (keyboard event handling) 
-		// or in the GUI event handlers above, or both!
+        std::cout<< "Sveis\n";                
 
     case EDIT_NONE:
     default:
@@ -169,7 +202,7 @@ void mainloop() {
 
 		//Draw X axis in red
 		w_state->loadColorMaterial(glm::vec4(1, 0, 0, 1));
-		w_state->loadObjectTransforms(glm::rotate(glm::mat4(),-90.0f, glm::vec3(0, 0, 1)));
+		w_state->loadObjectTransforms(glm::rotate(glm::mat4(), static_cast<float>(-M_PI_2), glm::vec3(0, 0, 1)));
 		g_axis->drawMesh();
 
 		//Draw Y axis in green
@@ -179,7 +212,7 @@ void mainloop() {
 
 		//Draw Z axis in blue
 		w_state->loadColorMaterial(glm::vec4(0, 0, 1, 1));
-		w_state->loadObjectTransforms(glm::rotate(glm::mat4(),90.0f, glm::vec3(1, 0, 0)));
+		w_state->loadObjectTransforms(glm::rotate(glm::mat4(), static_cast<float>(M_PI_2), glm::vec3(1, 0, 0)));
 		g_axis->drawMesh();
 	}
 
@@ -350,10 +383,9 @@ int main(int argc, char *argv[]) {
     GLuint shaderProgram[3] = {0};
     GLuint shaders[3] = {0};
 
+	// create axis shader program
     buildShader(GL_VERTEX_SHADER, "axes.vs.glsl", shaders[0]);
     buildShader(GL_FRAGMENT_SHADER, "default.fs.glsl", shaders[1]);
-
-    // create axis shader program
     shaderProgram[0] = buildProgram(2, shaders);
 
     // create the shaders for the mesh
@@ -387,7 +419,7 @@ int main(int argc, char *argv[]) {
      * LOAD MESH
      *********************************************/
 	// instruct the mainloop to load the mesh at the first iteration
-	mesh_curr = 0; // you can set the default model to load, or -1 for none at all.
+	mesh_curr = 2; // you can set the default model to load, or -1 for none at all.
 	c_state.op = EDIT_RELOAD;
 
     g_axis = createAxis(*r_state[1], 1);

@@ -36,9 +36,6 @@
 EditMesh *loadEditMeshFromFile(std::string file_name);
 
 namespace detail{
-	void foo() {
-		;
-	}
 	inline void init( half_edge& he, std::size_t next, std::size_t twin, std::size_t vert, std::size_t face ){
 		he.next = next;
 		he.twin = twin;
@@ -210,8 +207,9 @@ void EditMesh::init( const std::vector<double>& xyzPositions, const std::vector<
 	// The Eigen matrix has the same format as the incoming vector so we can straight copy it.
 	// HACK: This is pretty sketchy and relies on Eigen::Vector3d having the same layout as a double[3] and nothing extra or fancy alignment.
 	std::copy( xyzPositions.begin(), xyzPositions.end(), m_vertices.front().data() );
-
 	init_adjacency( xyzPositions.size() / 3, triangleVerts, m_heData, m_faceData, m_vertData );
+	//
+	vertex_angle_errors.reserve(m_vertData.size());
 }
 
 half_edge* EditMesh::find_twin( std::size_t vFrom, std::size_t vTo ){
@@ -1150,6 +1148,49 @@ void EditMesh::get_draw_normals( float *normals ) const {
     }
 }
 
+void EditMesh::get_draw_colors( float *colors) const {
+	std::cout << "get_draw_colors called.\n";
+
+	//colors setup: [[v11 v12 v13], [v21 v22 v23], ..., [vn1 vn2 vn2]]
+	//might have to get technical here...
+
+	// for each face
+    for( std::size_t f = 0, iEnd = m_faceData.size(); f < iEnd; ++f ){
+		size_t he_idx = m_faceData[f];
+
+        // for each vertex of the face
+        for( int v = 0; v < 3; ++v){
+			
+			//mapping from vertex_index (vv) to index in colors
+
+			float color[3] = {-1.0f, -1.0f, -1.0f}; // negative colors will be discarded by the shader and normal lighting will be applied
+
+            // for each component of the vertex
+            for( int k = 0; k < 3; ++k){
+                colors[3*(3*f+v) + k] = color[k];
+            }
+			he_idx = m_heData[he_idx].next;
+        }
+    }
+
+	//now all vertices have default color.
+	
+	//get top 10 candidates
+	//if (!vertex_angle_errors.empty()) {get min-error vertex, and 9 next v's }
+
+	float color[3] = {-1.0f, -1.0f, -1.0f};
+	//set top vertex candidate blue
+	if (false) { //test with vertex number 2
+		color[0] = 0.0f;
+		color[1] = 0.0f;
+		color[2] = 1.0f;
+	}
+
+	//set 2-9 min error vertices as red
+
+
+}
+
 void EditMesh::get_draw_selection( int *selection ) const {
     for( std::size_t i = 0, iEnd = m_faceData.size(); i < iEnd; i++ ){
         size_t verts[3];
@@ -1502,9 +1543,154 @@ bool EditMesh::is_safe_addface( std::size_t v1, std::size_t v2, std::size_t v3 )
     //       (v3 != HOLE_INDEX && v1 != HOLE_INDEX);
 }
 
+void EditMesh::example() {
+	// iterate over all halfedges of the mesh
+	for (size_t i = 0; i < m_heData.size(); ++i) {
+		const half_edge* he = &m_heData[i];
+	}
 
-namespace utility {
+	// iterate over all faces of the mesh
+	for (size_t f = 0; f < m_faceData.size(); ++f) {
+		// one of its halfedges is m_faceData[i];
+	}
+
+	// iterate over all vertices of the mesh
+	for (size_t v = 0; v < m_vertData.size(); ++v) {
+		// one of its halfedges is m_vertData[i];
+	}
+
+	// iterate over first ring of a vertex
+	size_t vFrom = 42;
+	vvert_iterator it;
+	if( !this->init_iterator( it, vFrom ) ) { /* error, vertex doesn't exist or has no neighbors */ }
+	do {
+		size_t vTo = deref_iterator(it);
+	} while ( this->advance_iterator(it) );
+
+	// similarly for other iterators (vface, fvert, fface)
+
+	// get the 3 halfedges of a face
+	{
+		size_t face = 42;
+		size_t he_idx = m_faceData[face];
+		const half_edge* he1 = &m_heData[he_idx];
+		const half_edge* he2 = &next(*he1);
+		const half_edge* he3 = &next(*he2);
+	}
+}
+
+/*
+ * Use good ol' cosine formula to sum over the angles for each umbrella in the mesh._expression._expression
+ * This is a reasonable estimate for curvature, which is a good error metric for vertex removal. 
+ */ 
+void EditMesh::compute_angle_errors() {
+	vertex_angle_errors = std::vector<v_error_pair>(m_vertData.size());
+
+	Eigen::Vector3d v1, v2;
+	float angle_sum;
+	he_index current, next, first;
+
+	for (vertex_index v=0; v<m_vertData.size(); v++) {
+
+		Eigen::Vector3d center_vertex = get_vertex(v);
+		
+		angle_sum = 0;
+		first = m_vertData[v];
+		
+		current = first;
+		next = m_heData[m_heData[m_heData[first].next].next].twin;
+		
+		do { //Holy fuck..
+			v1 = get_vertex(m_heData[m_heData[current].next].vert) - center_vertex;
+			v2 = get_vertex(m_heData[m_heData[next].next].vert) - center_vertex;
+			angle_sum += acos(v1.dot(v2) / (v1.norm() * v2.norm()));
+			current = next;
+			next = m_heData[m_heData[m_heData[next].next].next].twin;
+		} while (current != first);
+
+		angle_sum /= (2*M_PI);
+
+		vertex_angle_errors.push_back(std::make_pair(v, std::abs(1-angle_sum)));
+	}
+}
+
+void EditMesh::sort_angle_errors() {
+	std::sort(vertex_angle_errors.begin(), vertex_angle_errors.end(), EditMesh::ComparePair());
+}
+
+bool EditMesh::remove_vertex(vertex_index v) {
+	return true;
+}
+
+/*
+ * simplify_vertex_removal(n)
+ *
+ * Main entry point for vertex removal. Simplifies the mesh by removing n vertices, if possible.
+ */
+
+void EditMesh::simplify_vertex_removal(int number_operations) {
 	
+	/*std::map<vertex_index, float> test (3);
+	test[0] = 1.1;
+	test[1] = 0.3;
+	test[2] = 0.4;*/	
+	
+	
+	std::cout << "Mesh simplification will start...\nAttempting to remove " << number_operations << " vertices\n";
+
+	if (number_operations >= m_vertData.size()) {
+		std::cout << "Cannot remove more vertices than exist in the mesh!" << std::endl;
+		return;
+	}
+	
+	int removal_counter = 0;
+	while (removal_counter < number_operations) {
+		//go through vertices and compute & store the errors
+		compute_angle_errors();
+		//make sure errors are sorted
+
+		//zeros
+		for (vertex_index v=0; v<m_vertData.size(); v++) {
+			std::cout << "("<<vertex_angle_errors[v].first<<", "<<vertex_angle_errors[v].second<<")"<<std::endl;
+		}
+
+		sort_angle_errors();
+
+		//somethings..
+		for (vertex_index v=0; v<m_vertData.size(); v++) {
+			std::cout << "("<<vertex_angle_errors[v].first<<", "<<vertex_angle_errors[v].second<<")"<<std::endl;
+		}
+
+		//get the index of the vertex with the least associated error		
+		vertex_index vertex_to_remove = vertex_angle_errors.back().first;
+		std::cout << "Will attempt to remove vertex: " << vertex_to_remove;
+		std::cout << " (error " << vertex_angle_errors.back().second << ")" << std::endl;
+		
+		//remove the vertex and triangulate the hole
+		while (!remove_vertex(vertex_to_remove)) { //unable to remove the vertex with min error
+			std::cout << "Vertex cannot be removed, moving on.." << std::endl;
+			vertex_angle_errors.pop_back();
+			if (vertex_angle_errors.empty()) {
+				std::cout << "There are no more vertices feasible for removal.." << std::endl;
+				std::cout << "Only removed " << removal_counter << " vertices" << std::endl;
+				return;
+			}
+			vertex_to_remove = vertex_angle_errors.back().first; //try next vertex instead
+		}
+		removal_counter++;				
+	}
+
+	//remove the vertex we have just removed from the mesh from the queue
+	//now vertex_angle_errors will contain just the vertices left in the mesh, 
+	//in the right order. This ordering of vertices can be used in get_draw_colors
+	//vertex_angle_errors.pop_back(); //not really enough, need to recompute errors of affected vertices
+
+	//at the end of this function, vertex_angle_errors will contain the errors of all the vertices in the mesh
+	edit_count++;
+}
+
+void EditMesh::simplify_edge_collapse(int number_operations) {
+
 }
 
 void EditMesh::print_mesh_data(std::string title) {
@@ -1513,8 +1699,6 @@ void EditMesh::print_mesh_data(std::string title) {
 		std::cout << "Faces: " << m_faceData.size() << std::endl;
 		std::cout << "Halfedges: " << m_heData.size() << std::endl;
 }
-
-
 
 std::vector<Eigen::Vector3d> EditMesh::compute_even_positions() {
 //first, go through old vertices and compute & store their new positions
@@ -1773,7 +1957,7 @@ void EditMesh::test_mesh() {
 */
 
 bool EditMesh::loop_subdivide() {
-
+	std::cout << "Geir\n";
 	//print_mesh_data("Starting Loop subdivision.\nOriginal mesh has");
 
 	//Start with computing new vertex positions using Loop's equation
