@@ -1584,7 +1584,7 @@ void EditMesh::example() {
  * This is a reasonable estimate for curvature, which is a good error metric for vertex removal. 
  */ 
 void EditMesh::compute_angle_errors() {
-	vertex_angle_errors = std::vector<v_error_pair>(m_vertData.size());
+	vertex_angle_errors.clear();
 
 	Eigen::Vector3d v1, v2;
 	float angle_sum;
@@ -1600,7 +1600,7 @@ void EditMesh::compute_angle_errors() {
 		current = first;
 		next = m_heData[m_heData[m_heData[first].next].next].twin;
 		
-		do { //Holy fuck..
+		do {
 			v1 = get_vertex(m_heData[m_heData[current].next].vert) - center_vertex;
 			v2 = get_vertex(m_heData[m_heData[next].next].vert) - center_vertex;
 			angle_sum += acos(v1.dot(v2) / (v1.norm() * v2.norm()));
@@ -1648,23 +1648,12 @@ void EditMesh::simplify_vertex_removal(int number_operations) {
 		//go through vertices and compute & store the errors
 		compute_angle_errors();
 		//make sure errors are sorted
-
-		//zeros
-		for (vertex_index v=0; v<m_vertData.size(); v++) {
-			std::cout << "("<<vertex_angle_errors[v].first<<", "<<vertex_angle_errors[v].second<<")"<<std::endl;
-		}
-
 		sort_angle_errors();
-
-		//somethings..
-		for (vertex_index v=0; v<m_vertData.size(); v++) {
-			std::cout << "("<<vertex_angle_errors[v].first<<", "<<vertex_angle_errors[v].second<<")"<<std::endl;
-		}
 
 		//get the index of the vertex with the least associated error		
 		vertex_index vertex_to_remove = vertex_angle_errors.back().first;
 		std::cout << "Will attempt to remove vertex: " << vertex_to_remove;
-		std::cout << " (error " << vertex_angle_errors.back().second << ")" << std::endl;
+		std::cout << " (angle-error " << vertex_angle_errors.back().second << ")" << std::endl;
 		
 		//remove the vertex and triangulate the hole
 		while (!remove_vertex(vertex_to_remove)) { //unable to remove the vertex with min error

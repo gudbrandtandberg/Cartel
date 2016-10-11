@@ -22,6 +22,8 @@
 #include <iostream>
 
 #include <stdio.h>
+#define _USE_MATH_DEFINES
+#include <cmath>
 #include <math.h>
 
 #ifndef GLM_FORCE_RADIANS 
@@ -135,12 +137,12 @@ void mainloop() {
 		if (ImGui::Button("Edge Collapse Simplification")) { }
 		ImGui::End();
 	}
-	ImGui::Begin("Debug Window");
+	/*ImGui::Begin("Debug Window");
 	ImGui::Text("Hello, World");
 	if (ImGui::Button("Test Button")) { printf("Clicked!\n"); }
 	static char buf1[64] = ""; 
 	ImGui::InputText("", buf1, 64);
-	ImGui::End();
+	ImGui::End();*/
 	
     // Clear the buffer we will draw into.
     glClearColor(0.549f, 0.47f, 0.937f, 1.0f);
