@@ -1619,6 +1619,9 @@ void EditMesh::sort_angle_errors() {
 }
 
 bool EditMesh::remove_vertex(vertex_index v) {
+
+
+
 	return true;
 }
 
@@ -1629,13 +1632,6 @@ bool EditMesh::remove_vertex(vertex_index v) {
  */
 
 void EditMesh::simplify_vertex_removal(int number_operations) {
-	
-	/*std::map<vertex_index, float> test (3);
-	test[0] = 1.1;
-	test[1] = 0.3;
-	test[2] = 0.4;*/	
-	
-	
 	std::cout << "Mesh simplification will start...\nAttempting to remove " << number_operations << " vertices\n";
 
 	if (number_operations >= m_vertData.size()) {

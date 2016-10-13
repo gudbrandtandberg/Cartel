@@ -61,11 +61,11 @@ DrawMesh *g_axis; // NOTE: only a single axis
 int mesh_curr = -1;
 int mesh_file_size = 13; // size of the array below
 const char *mesh_files[] = {"Mesh/camel.obj",
+                            "Mesh/cube.obj",
                             "Mesh/icosahedron.obj",
-                            "Mesh/cow_head.obj",
                             "Mesh/cow1.obj",
 							"Mesh/cow2.obj",
-							"Mesh/cube.obj",
+							"Mesh/cow_head.obj",
 							"Mesh/horse.obj",
 							"Mesh/octopus.obj",
                             "Mesh/tetrahedron.obj",
