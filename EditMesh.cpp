@@ -284,7 +284,7 @@ bool EditMesh::flip_edge( half_edge &he ){
 
 // IMPORTANT: Given a collection of half-edges to delete (ex. When removing a face we need to kill 2, 4, or 6 half-edges) they must be deleting in decreasing index order!
 void EditMesh::delete_half_edge_impl( std::size_t he ){
-	assert( (m_heData[he].vert >= m_vertData.size() || m_vertData[m_heData[he].vert] != he) && "Deleting this half_edge leaves a dangling link from a vertex. Must handle this first" );
+//	assert( (m_heData[he].vert >= m_vertData.size() || m_vertData[m_heData[he].vert] != he) && "Deleting this half_edge leaves a dangling link from a vertex. Must handle this first" );
 		
 	// Move a half_edge from the end overtop of the half_edge we are deleting, then update the indices of linked half_edges.
 	m_heData[he] = m_heData.back();
@@ -650,7 +650,10 @@ void EditMesh::delete_face( std::size_t f ){
 
 	heIndices[1] = he[0]->next;
 	heIndices[2] = he[1]->next;
-	
+
+	//std::cout << "Attempting to remove face " << f << std::endl;
+	//std::cout << he[0]->face << ", " << he[1]->face << ", " << he[2]->face << std::endl;
+
 	assert( he[0]->face == f && he[1]->face == f && he[2]->face == f );
 	assert( he[2]->next == m_faceData[f] );
 
@@ -1149,8 +1152,6 @@ void EditMesh::get_draw_normals( float *normals ) const {
 }
 
 void EditMesh::get_draw_colors( float *colors) const {
-	std::cout << "get_draw_colors called.\n";
-
 	//colors setup: [[v11 v12 v13], [v21 v22 v23], ..., [vn1 vn2 vn2]]
 	//might have to get technical here...
 
@@ -1619,8 +1620,119 @@ void EditMesh::sort_angle_errors() {
 }
 
 bool EditMesh::remove_vertex(vertex_index v) {
+	print_mesh_data("MESH DATA BEFORE REMOVAL:");
+	std::vector<he_index> he_to_remove;
+	std::vector<face_index> faces_to_remove;
+	std::vector<he_index> boundary_halfedges;
 
+	he_index current, first;
+	first = m_vertData[v];
+	current = first;
 
+	//loop through the edge-pairs emanating from this vertex
+	//collect indices for removal
+	do {
+		//flag twin-pair for removal			
+		he_to_remove.push_back(current);
+		he_to_remove.push_back(m_heData[current].twin);
+
+		//and face
+		faces_to_remove.push_back(m_heData[current].face);
+
+		he_index boundary_he = m_heData[current].next;
+		boundary_halfedges.push_back(boundary_he);
+		
+		current = m_heData[m_heData[boundary_he].next].twin;
+	} while (current != first);
+
+	std::cout << "Need to remove " << he_to_remove.size() << " halfedges" << std::endl;
+	std::cout << "Need to remove " << faces_to_remove.size() << " faces" << std::endl;
+
+	std::sort(faces_to_remove.begin(), faces_to_remove.end(), std::greater<face_index>());
+	//THIS IS WHERE IT CRASHES!
+	for (int f=0; f<faces_to_remove.size(); f++) {
+		delete_face(faces_to_remove[f]);
+		//std::cout << faces_to_remove[f] << ", ";
+	}
+	//std::cout << std::endl;
+
+	//move vertex to end and remove it
+	vertex_index old_last_vertex = m_vertData.size()-1;
+	std::swap(m_vertData[old_last_vertex], m_vertData[v]);
+	m_vertData.pop_back();
+
+	print_mesh_data("MESH DATA AFTER REMOVAL:");
+
+	std::cout << "Halfedges that make up the hole" << std::endl;
+	for (int i=0; i<boundary_halfedges.size(); i++) {
+		std::cout << boundary_halfedges[i];
+		std::cout << "(next " << m_heData[boundary_halfedges[i]].next << ", ";
+		std::cout << "(vert " << m_heData[boundary_halfedges[i]].vert << "), ";
+	}
+	std::cout << std::endl;
+	std::cout << "We have a next loop!" << std::endl;
+
+	/********************PART 2 - TRIANGULATION**********************/
+	std::cout << "Let's fucking triangulate!" << std::endl;
+
+	vertex_index fan_base = m_heData[boundary_halfedges[0]].vert;
+	int num_new_faces = boundary_halfedges.size() - 2;
+	face_index new_faces[num_new_faces];
+	for (int i=0; i < num_new_faces; i++) {
+		new_faces[i] = m_faceData.size()+i;
+	}
+	vertex_index to_vert;
+	current = boundary_halfedges[0];
+	he_index second_bound, next_second;
+
+	//in this loop we add a halfedge pair from fan_base to to_vert 
+	for (int new_face_number=0; new_face_number < num_new_faces-1; new_face_number++) {
+		second_bound = m_heData[current].next;
+		next_second = m_heData[second_bound].next;
+		to_vert =  m_heData[next_second].vert;
+
+		he_index he1_i = m_heData.size();
+		he_index he2_i = m_heData.size()+1;
+		half_edge he1 = {};
+		half_edge he2 = {};
+
+		he1.vert = to_vert;
+		he1.twin = he2_i;
+		he1.next = current;
+		he1.face = new_faces[new_face_number];
+
+		he2.vert = fan_base;
+		he2.next = next_second;
+		he2.face = new_faces[new_face_number+1];
+		he2.twin = he1_i;
+
+		m_heData[second_bound].next = he1_i;
+		m_heData[current].face = new_faces[new_face_number];
+		m_heData[second_bound].face = new_faces[new_face_number];
+
+		m_faceData.push_back(current);
+
+		m_heData.push_back(he1);
+		m_heData.push_back(he2);
+
+		current = he2_i;
+	}
+
+	//one more face to add, no more halfedges, just connectivity. 
+	he_index last = boundary_halfedges.back();
+	second_bound = m_heData[current].next;
+	
+	m_heData[current].face = new_faces[num_new_faces-1];
+	m_heData[last].face = new_faces[num_new_faces-1];
+	m_heData[second_bound].face = new_faces[num_new_faces-1];
+
+	m_heData[last].next = current;
+	m_heData[current].next = second_bound;
+	m_heData[second_bound].next = last;
+
+	m_faceData.push_back(current);
+
+	print_mesh_data("MESH DATA AFTER TRIANGULATION:");
 
 	return true;
 }
