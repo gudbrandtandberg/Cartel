@@ -28,6 +28,7 @@ typedef size_t face_index;
 typedef size_t vertex_index;
 typedef size_t he_index;
 typedef std::pair<vertex_index, float> v_error_pair;
+//typedef std::pair<vertex_index, Eigen::Matrix> v_q_error_pair;
 
 const std::size_t HOLE_INDEX = static_cast<std::size_t>( -1 );
 
@@ -137,14 +138,16 @@ public:
     void simplify_vertex_removal(int number_operations); 
     void compute_angle_errors();
 	void sort_angle_errors();
-	bool remove_vertex(vertex_index v);
-
-	
+	bool remove_vertex(vertex_index v);	
 	std::vector<v_error_pair> vertex_angle_errors;
 
 	//Edge collapse simplification
 	void simplify_edge_collapse(int number_operations); 
+	void initialize_Q_matrices();
+	void compute_quadric_errors();
 
+	std::vector<Eigen::Matrix<double, 4, 4>> vertex_Q_matrices;
+	
     //general mesh-related
 	void test_mesh();
 	void print_face(face_index f);

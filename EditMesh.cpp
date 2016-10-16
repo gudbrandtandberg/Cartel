@@ -210,6 +210,7 @@ void EditMesh::init( const std::vector<double>& xyzPositions, const std::vector<
 	init_adjacency( xyzPositions.size() / 3, triangleVerts, m_heData, m_faceData, m_vertData );
 	//
 	vertex_angle_errors.reserve(m_vertData.size());
+	vertex_Q_matrices.reserve(m_vertData.size());
 }
 
 half_edge* EditMesh::find_twin( std::size_t vFrom, std::size_t vTo ){
@@ -1786,8 +1787,106 @@ void EditMesh::simplify_vertex_removal(int number_operations) {
 	edit_count++;
 }
 
-void EditMesh::simplify_edge_collapse(int number_operations) {
+//TODO: modify to instead of recomputing all errors, handle three cases based on some flagging:
+void EditMesh::initialize_Q_matrices() {
+	he_index current, first, next;
+	double A, B, C, D;
 
+	for (vertex_index v=0; v<m_vertData.size(); v++) {
+
+		first = m_vertData[v];
+		current = first;
+		next = m_heData[m_heData[m_heData[current].next].next].twin;
+		Eigen::Matrix<double, 4, 4> Q_v;
+		Eigen::Matrix<double, 4, 4> K;
+		Eigen::Vector3d center_vert = get_vertex(v);
+		do {
+			//compute plane equation for this triangle and add distance matrix to Q 
+			Eigen::Vector3d v1 = get_vertex(m_heData[m_heData[current].next].vert) - center_vert;
+			Eigen::Vector3d v2 = get_vertex(m_heData[m_heData[next].next].vert) - center_vert;
+
+			Eigen::Vector3d normal = (v1.cross(v2)).normalized();
+			A = normal(0);
+			B = normal(1);
+			C = normal(2);
+			D = -(center_vert(0)*A + center_vert(1)*B + center_vert(2)*C);
+
+			K << A*A, A*B, A*C, A*D,
+			 	 A*B, B*B, B*C, B*D,
+			 	 A*C, B*C, C*C, C*D,
+			 	 A*D, B*D, C*D, D*D;
+
+			Q_v += K;
+
+			current = next;
+			next = m_heData[m_heData[m_heData[current].next].next].twin;
+		} while (current != first);
+		vertex_Q_matrices[v] = Q_v;
+		Q_v = Eigen::Matrix<double, 4, 4>::Zero();
+	}
+}
+
+void EditMesh::compute_quadric_errors() {
+	//really only needs to find the edge with the smallest associated error
+
+	double min_error = std::numeric_limits<double>::max(), error;
+	Eigen::Matrix<double, 4, 4> Q, Q_mod;
+	Eigen::Matrix<double, 4, 1> v;
+	Eigen::Vector3d best_v;
+	vertex_index v1, v2, v1_to_collapse, v2_to_collapse;
+
+	//loop through all edges in the mesh & compute error
+	std::set<he_index> already_visited;
+	for (he_index he=0; he<m_heData.size(); he++) {
+		if (already_visited.find(he) != already_visited.end()) {continue;}
+
+		v1 = m_heData[he].vert;
+		v2 = m_heData[m_heData[he].twin].vert;
+		Q = vertex_Q_matrices[v1] + vertex_Q_matrices[v2];
+		Q_mod = Q;
+		Eigen::Matrix<double, 4, 1> rhs;
+		rhs << 0, 0, 0, 1;
+		Q_mod(3, 0) = Q_mod(3, 1) = Q_mod(3, 2) = 0;
+		Q_mod(3, 3) = 1;		
+		v = Q_mod.inverse() * rhs;
+		
+		error = v.transpose() * Q * v;
+		std::cout << "Error is " << error << std::endl;
+		if (error < min_error)
+		{
+		    v1_to_collapse = v1;
+		    v2_to_collapse = v2;
+		    min_error = error;
+			best_v = v.block(0, 0, 3, 1);
+		}
+		already_visited.insert(he);
+		already_visited.insert(m_heData[he].twin);
+	}
+
+	std::cout << "Will collapse the edge between vertices " << v1_to_collapse << " and " << v2_to_collapse << std::endl;
+	std::cout << "Associated error is " << min_error << std::endl;
+	std::cout << "New vertex position is\n" << best_v << std::endl;
+
+	// oh go on then, could just as well collapse an edge right here...
+	//new_vert should be v2_to_collapse
+	vertex_index new_vert = collapse_edge(find_edge(v1_to_collapse, v2_to_collapse)->twin);
+	set_vertex(new_vert, best_v);
+
+	//now we need to update some Q's, and think about how to continue
+
+}
+
+//how cartel deletes stuff ;)
+//this->delete_half_edges_impl( heToDelete );
+//detail::delete_face( m_faceData, m_heData, fToDelete[0] );
+
+void EditMesh::simplify_edge_collapse(int number_operations) {
+	std::cout << "Will attempt to collapse " << number_operations << " vertices" << std::endl;
+
+	initialize_Q_matrices();
+	compute_quadric_errors();
+
+	edit_count++;
 }
 
 void EditMesh::print_mesh_data(std::string title) {

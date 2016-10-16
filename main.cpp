@@ -134,7 +134,7 @@ void mainloop() {
 		// feel free to add more controls
 		ImGui::SliderInt("Number operations", &simplify_n_operations, 1, 100);
 		if (ImGui::Button("Vertex Removal Simplification")) {c_state.op = EDIT_SIMPLIFIY_VERTEX_REMOVAL; }
-		if (ImGui::Button("Edge Collapse Simplification")) { }
+		if (ImGui::Button("Edge Collapse Simplification")) {c_state.op = EDIT_SIMPLIFY_EDGE_COLLAPSE; }
 		ImGui::End();
 	}
 	/*ImGui::Begin("Debug Window");
@@ -182,11 +182,9 @@ void mainloop() {
 		c_state.op = EDIT_NONE;
 		break;
 
-	case EDIT_LOOP_SUBDIV:
-        std::cout<< "Hei\n";                
+	case EDIT_LOOP_SUBDIV:             
 		g_mesh->get_editMesh()->loop_subdivide();
-		c_state.op = EDIT_NONE;
-        std::cout<< "Sveis\n";                
+		c_state.op = EDIT_NONE;               
 
     case EDIT_NONE:
     default:
