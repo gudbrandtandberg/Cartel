@@ -27,7 +27,7 @@
 typedef size_t face_index;   
 typedef size_t vertex_index;
 typedef size_t he_index;
-typedef std::pair<vertex_index, float> v_error_pair;
+typedef std::pair<vertex_index, float> error_pair;
 //typedef std::pair<vertex_index, Eigen::Matrix> v_q_error_pair;
 
 const std::size_t HOLE_INDEX = static_cast<std::size_t>( -1 );
@@ -127,6 +127,9 @@ public:
 
 	};
 
+	bool is_using_vertex_removal;
+	bool is_using_edge_collapse;
+
 	//"Loop"" subdivide & subroutines
 	bool loop_subdivide();
 	std::vector<Eigen::Vector3d> compute_even_positions();
@@ -135,11 +138,13 @@ public:
 	void update_mesh(std::vector<Eigen::Vector3d> new_odd_positions);
 
 	//Vertex removal simplification
+	std::vector<error_pair> vertex_angle_errors;
     void simplify_vertex_removal(int number_operations); 
     void compute_angle_errors();
-	void sort_angle_errors();
-	bool remove_vertex(vertex_index v);	
-	std::vector<v_error_pair> vertex_angle_errors;
+	void sort_angle_errors(); 
+	std::vector<he_index> remove_vertex(vertex_index v);
+	void delete_vertex_impl(vertex_index v);
+	bool triangulate_hole(std::vector<he_index> boundary_halfedges);
 
 	//Edge collapse simplification
 	void simplify_edge_collapse(int number_operations); 

@@ -57,7 +57,6 @@ namespace detail{
 			std::size_t he = faceData[f];
 			do {
 				assert( heData[he].face == faceData.size() );
-
 				heData[he].face = f;
 				he = heData[he].next;
 			} while( he != faceData[f] );
@@ -285,7 +284,7 @@ bool EditMesh::flip_edge( half_edge &he ){
 
 // IMPORTANT: Given a collection of half-edges to delete (ex. When removing a face we need to kill 2, 4, or 6 half-edges) they must be deleting in decreasing index order!
 void EditMesh::delete_half_edge_impl( std::size_t he ){
-//	assert( (m_heData[he].vert >= m_vertData.size() || m_vertData[m_heData[he].vert] != he) && "Deleting this half_edge leaves a dangling link from a vertex. Must handle this first" );
+	assert( (m_heData[he].vert >= m_vertData.size() || m_vertData[m_heData[he].vert] != he) && "Deleting this half_edge leaves a dangling link from a vertex. Must handle this first" );
 		
 	// Move a half_edge from the end overtop of the half_edge we are deleting, then update the indices of linked half_edges.
 	m_heData[he] = m_heData.back();
@@ -293,6 +292,7 @@ void EditMesh::delete_half_edge_impl( std::size_t he ){
 
 	// We may have just deleted the item at the end of the list, so we have nothing to update since the indices didn't change.
 	if( he != m_heData.size() ){
+
 		const half_edge& heMoved = m_heData[he];
 
 		// If the moved half_edge was the arbitrary half_edge linked to the vertex, update it.
@@ -319,8 +319,9 @@ void EditMesh::delete_half_edge_impl( std::size_t he ){
 #else
 		// Have to loop around the face until we find the half_edge using 'heMoved' as its 'next' entry, then update it.
 		std::size_t hePrev = heMoved.next;
-		while( m_heData[hePrev].next != m_heData.size() )
+		while( m_heData[hePrev].next != m_heData.size() ) {
 			hePrev = m_heData[hePrev].next;
+		}
 
 		assert( m_heData[hePrev].next == m_heData.size() );
 		m_heData[hePrev].next = he;
@@ -1153,20 +1154,45 @@ void EditMesh::get_draw_normals( float *normals ) const {
 }
 
 void EditMesh::get_draw_colors( float *colors) const {
-	//colors setup: [[v11 v12 v13], [v21 v22 v23], ..., [vn1 vn2 vn2]]
-	//might have to get technical here...
+	//keep track of the vertex with least error, 
+	//as well as the 9 next vertices in the queue.
+	std::set<vertex_index> nine_last;
+	vertex_index last_vertex;
+	if (is_using_edge_collapse) {
+	    for (int i = 0; i < 10; i++) {
+			;
+	    }
+	}
+	else if (is_using_vertex_removal) {
+	    size_t s = vertex_angle_errors.size();
+		last_vertex = vertex_angle_errors[s-1].first;
+	    for (int i = 2; i <= 10; i++) {
+			nine_last.insert(vertex_angle_errors[s - i].first);
+	    }
+	}
 
 	// for each face
     for( std::size_t f = 0, iEnd = m_faceData.size(); f < iEnd; ++f ){
 		size_t he_idx = m_faceData[f];
 
         // for each vertex of the face
-        for( int v = 0; v < 3; ++v){
+        for( int v = 0; v < 3; ++v) {
+			float color[3];
+			int vert = m_heData[he_idx].vert;
+
+			color[0] = -1.0f;
+			color[1] = -1.0f;
+			color[2] = -1.0f;
 			
-			//mapping from vertex_index (vv) to index in colors
-
-			float color[3] = {-1.0f, -1.0f, -1.0f}; // negative colors will be discarded by the shader and normal lighting will be applied
-
+			if (std::find(nine_last.begin(), nine_last.end(), vert) != nine_last.end()) {
+				color[0] = 1.0f;
+				color[1] = 0.0f;
+				color[2] = 0.0f;
+			} else if (vert == last_vertex) {
+				color[0] = 0.0f;
+				color[1] = 0.0f;
+				color[2] = 1.0f;
+			}
             // for each component of the vertex
             for( int k = 0; k < 3; ++k){
                 colors[3*(3*f+v) + k] = color[k];
@@ -1174,23 +1200,6 @@ void EditMesh::get_draw_colors( float *colors) const {
 			he_idx = m_heData[he_idx].next;
         }
     }
-
-	//now all vertices have default color.
-	
-	//get top 10 candidates
-	//if (!vertex_angle_errors.empty()) {get min-error vertex, and 9 next v's }
-
-	float color[3] = {-1.0f, -1.0f, -1.0f};
-	//set top vertex candidate blue
-	if (false) { //test with vertex number 2
-		color[0] = 0.0f;
-		color[1] = 0.0f;
-		color[2] = 1.0f;
-	}
-
-	//set 2-9 min error vertices as red
-
-
 }
 
 void EditMesh::get_draw_selection( int *selection ) const {
@@ -1582,7 +1591,7 @@ void EditMesh::example() {
 }
 
 /*
- * Use good ol' cosine formula to sum over the angles for each umbrella in the mesh._expression._expression
+ * Use good old cosine formula to sum over the angles for each umbrella in the mesh._expression._expression
  * This is a reasonable estimate for curvature, which is a good error metric for vertex removal. 
  */ 
 void EditMesh::compute_angle_errors() {
@@ -1593,15 +1602,11 @@ void EditMesh::compute_angle_errors() {
 	he_index current, next, first;
 
 	for (vertex_index v=0; v<m_vertData.size(); v++) {
-
 		Eigen::Vector3d center_vertex = get_vertex(v);
-		
 		angle_sum = 0;
 		first = m_vertData[v];
-		
 		current = first;
 		next = m_heData[m_heData[m_heData[first].next].next].twin;
-		
 		do {
 			v1 = get_vertex(m_heData[m_heData[current].next].vert) - center_vertex;
 			v2 = get_vertex(m_heData[m_heData[next].next].vert) - center_vertex;
@@ -1620,7 +1625,23 @@ void EditMesh::sort_angle_errors() {
 	std::sort(vertex_angle_errors.begin(), vertex_angle_errors.end(), EditMesh::ComparePair());
 }
 
-bool EditMesh::remove_vertex(vertex_index v) {
+void EditMesh::delete_vertex_impl(vertex_index v) {
+	//we must assume that no halfedges emenate from this vertex
+	//move vertex to end and delete it,
+	//then update heData to reflect this
+	vertex_index old_last_vertex = m_vertData.size()-1;
+	std::swap(m_vertData[old_last_vertex], m_vertData[v]);
+	std::swap(m_vertices[old_last_vertex], m_vertices[v]);
+	m_vertices.pop_back();
+	m_vertData.pop_back();
+	for (he_index he=0; he<m_heData.size(); he++) {
+		if (m_heData[he].vert == old_last_vertex) {
+			m_heData[he].vert = v;
+		}
+	}
+}
+
+std::vector<he_index> EditMesh::remove_vertex(vertex_index v) {
 	print_mesh_data("MESH DATA BEFORE REMOVAL:");
 	std::vector<he_index> he_to_remove;
 	std::vector<face_index> faces_to_remove;
@@ -1641,41 +1662,62 @@ bool EditMesh::remove_vertex(vertex_index v) {
 		faces_to_remove.push_back(m_heData[current].face);
 
 		he_index boundary_he = m_heData[current].next;
+		m_heData[boundary_he].face = HOLE_INDEX;
+		//make sure boundary verts point to he that exists
+		if (m_vertData[m_heData[boundary_he].vert] == m_heData[current].twin) {
+			m_vertData[m_heData[boundary_he].vert] = boundary_he;
+		}
+
 		boundary_halfedges.push_back(boundary_he);
-		
 		current = m_heData[m_heData[boundary_he].next].twin;
 	} while (current != first);
 
 	std::cout << "Need to remove " << he_to_remove.size() << " halfedges" << std::endl;
 	std::cout << "Need to remove " << faces_to_remove.size() << " faces" << std::endl;
 
+	//delete faces
 	std::sort(faces_to_remove.begin(), faces_to_remove.end(), std::greater<face_index>());
-	//THIS IS WHERE IT CRASHES!
 	for (int f=0; f<faces_to_remove.size(); f++) {
-		delete_face(faces_to_remove[f]);
-		//std::cout << faces_to_remove[f] << ", ";
+		detail::delete_face(m_faceData, m_heData, faces_to_remove[f]);
 	}
-	//std::cout << std::endl;
+	
+	//delete vertex
+	delete_vertex_impl(v);
+	
+	//delete halfedges //THIS IS WHERE IT CRASHES!
+	std::sort(he_to_remove.begin(), he_to_remove.end(), std::greater<he_index>());
+	for (int he=0; he<he_to_remove.size(); he++) {
+		delete_half_edge_impl(he_to_remove[he]);
+	}
 
-	//move vertex to end and remove it
-	vertex_index old_last_vertex = m_vertData.size()-1;
-	std::swap(m_vertData[old_last_vertex], m_vertData[v]);
-	m_vertData.pop_back();
+	//connect boundary halfedges in a next loop
+	for (int i=0; i<boundary_halfedges.size(); i++) {
+		if (i < boundary_halfedges.size()-1) {
+			m_heData[boundary_halfedges[i]].next = boundary_halfedges[i+1];
+		} else {
+			m_heData[boundary_halfedges[i]].next = boundary_halfedges[0];
+		}
+	}
 
 	print_mesh_data("MESH DATA AFTER REMOVAL:");
+	return boundary_halfedges;
+}
 
-	std::cout << "Halfedges that make up the hole" << std::endl;
+bool EditMesh::triangulate_hole(std::vector<he_index> boundary_halfedges) {
+	/*std::cout << "Halfedges that make up the hole" << std::endl;
+	
 	for (int i=0; i<boundary_halfedges.size(); i++) {
 		std::cout << boundary_halfedges[i];
 		std::cout << "(next " << m_heData[boundary_halfedges[i]].next << ", ";
 		std::cout << "(vert " << m_heData[boundary_halfedges[i]].vert << "), ";
 	}
-	std::cout << std::endl;
-	std::cout << "We have a next loop!" << std::endl;
 
-	/********************PART 2 - TRIANGULATION**********************/
+	std::cout << std::endl;
+	std::cout << "We have a next loop!" << std::endl;*/
+
 	std::cout << "Let's fucking triangulate!" << std::endl;
 
+	he_index current;
 	vertex_index fan_base = m_heData[boundary_halfedges[0]].vert;
 	int num_new_faces = boundary_halfedges.size() - 2;
 	face_index new_faces[num_new_faces];
@@ -1751,7 +1793,12 @@ void EditMesh::simplify_vertex_removal(int number_operations) {
 		std::cout << "Cannot remove more vertices than exist in the mesh!" << std::endl;
 		return;
 	}
+	if (is_using_edge_collapse) {
+		std::cout << "Cannot intermix edge-collapse and vertex-removal!" << std::endl;
+		return;
+	}
 	
+	is_using_vertex_removal = true;
 	int removal_counter = 0;
 	while (removal_counter < number_operations) {
 		//go through vertices and compute & store the errors
@@ -1761,11 +1808,15 @@ void EditMesh::simplify_vertex_removal(int number_operations) {
 
 		//get the index of the vertex with the least associated error		
 		vertex_index vertex_to_remove = vertex_angle_errors.back().first;
-		std::cout << "Will attempt to remove vertex: " << vertex_to_remove;
+		/*std::cout << "Will attempt to remove vertex: " << vertex_to_remove;
 		std::cout << " (angle-error " << vertex_angle_errors.back().second << ")" << std::endl;
-		
+		*/
+
+		std::vector<he_index> hole_edges = remove_vertex(vertex_to_remove);
+		triangulate_hole(hole_edges);
+
 		//remove the vertex and triangulate the hole
-		while (!remove_vertex(vertex_to_remove)) { //unable to remove the vertex with min error
+		/*while (!remove_vertex(vertex_to_remove)) { //unable to remove the vertex with min error
 			std::cout << "Vertex cannot be removed, moving on.." << std::endl;
 			vertex_angle_errors.pop_back();
 			if (vertex_angle_errors.empty()) {
@@ -1774,16 +1825,15 @@ void EditMesh::simplify_vertex_removal(int number_operations) {
 				return;
 			}
 			vertex_to_remove = vertex_angle_errors.back().first; //try next vertex instead
-		}
+		}*/
+		test_mesh();
 		removal_counter++;				
 	}
 
-	//remove the vertex we have just removed from the mesh from the queue
-	//now vertex_angle_errors will contain just the vertices left in the mesh, 
-	//in the right order. This ordering of vertices can be used in get_draw_colors
-	//vertex_angle_errors.pop_back(); //not really enough, need to recompute errors of affected vertices
+	//recompute angle errors for drawing colors //TODO: pass verts to recompute as arg?
+	compute_angle_errors();
+	sort_angle_errors();
 
-	//at the end of this function, vertex_angle_errors will contain the errors of all the vertices in the mesh
 	edit_count++;
 }
 
@@ -1876,15 +1926,26 @@ void EditMesh::compute_quadric_errors() {
 
 }
 
-//how cartel deletes stuff ;)
-//this->delete_half_edges_impl( heToDelete );
-//detail::delete_face( m_faceData, m_heData, fToDelete[0] );
-
 void EditMesh::simplify_edge_collapse(int number_operations) {
 	std::cout << "Will attempt to collapse " << number_operations << " vertices" << std::endl;
 
+	if (number_operations >= m_vertData.size()) {
+		std::cout << "Cannot remove more vertices than exist in the mesh!" << std::endl;
+		return;
+	}
+	if (is_using_edge_collapse) {
+		std::cout << "Cannot intermix edge-collapse and vertex-removal!" << std::endl;
+		return;
+	}
+
+	is_using_edge_collapse = true;
 	initialize_Q_matrices();
-	compute_quadric_errors();
+
+	int removal_counter = 0;
+	while (removal_counter < number_operations) {
+		compute_quadric_errors();
+		removal_counter++;
+	}
 
 	edit_count++;
 }

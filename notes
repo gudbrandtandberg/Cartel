@@ -1,0 +1,38 @@
+delete_vertex(v)
+ -remove vertex
+ -remove all halfedge twin pairs 
+ -remove faces, set HOLE_INDEX on boundary halfedges
+ -return vector<vertex_index> hole_vertices 
+
+
+triangulate(vector<vertex_index> hole_vertices) {
+    if length of hole_indeices == 3 return
+    for each vertex in hole_vertices
+        if next_vertex is convex ear
+            make halfedges
+            call triangulate(hole_indices-ear_tip_index)
+        break;
+
+}
+
+Potentially useful stuff:
+
+void delete_face( std::size_t face );
+void delete_face( std::vector<std::size_t>& faceData, std::vector<half_edge>& heData, std::size_t f );
+void delete_faces( std::vector<std::size_t>& faceData, std::vector<half_edge>& heData, std::size_t (&fToDelete)[N] );
+
+std::size_t  add_face( std::size_t v1, std::size_t v2, std::size_t v3 );
+std::size_t  add_face( std::size_t (&v)[3] );
+
+half_edge* find_edge( std::size_t vFrom, std::size_t vTo );
+half_edge* find_twin( std::size_t vFrom, std::size_t vTo );
+
+template <std::size_t N>
+void delete_half_edges_impl( std::size_t (&edges)[N] );
+
+bool is_safe_addface( std::size_t v1, std::size_t v2, std::size_t v3 );
+bool flip_edge( half_edge &cur );
+
+std::size_t EditMesh::collapse_edge( std::size_t he )
+half_edge* EditMesh::find_twin( std::size_t vFrom, std::size_t vTo );
+half_edge* EditMesh::find_edge( std::size_t vFrom, std::size_t vTo );
