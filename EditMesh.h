@@ -28,8 +28,8 @@
 typedef size_t face_index;   
 typedef size_t vertex_index;
 typedef size_t he_index;
-typedef std::pair<vertex_index, float> error_pair;
-//typedef std::pair<vertex_index, Eigen::Matrix> v_q_error_pair;
+typedef std::pair<vertex_index, double> error_pair;
+//typedef std::tuple<vertex_index, vertex_index, Eigen::Vector3d, float> edge_error;
 
 const std::size_t HOLE_INDEX = static_cast<std::size_t>( -1 );
 
@@ -115,30 +115,10 @@ public:
     /********************************
      * Gudbrand's code
      * 
-	 * Assignment 1: Loop Subdivision
-	 * 
 	 * 
      ********************************/
 
-	struct ComparePair {
-		public:
-		bool operator()(std::pair<vertex_index, float> lhs, std::pair<vertex_index, float> rhs) {
-			return lhs.second > rhs.second;
-		}
-	};
-
-	struct CompareQuadrics {
-		public:
-		bool operator()(std::tuple<vertex_index, vertex_index, Eigen::Vector3d, float> lhs, 
-						std::tuple<vertex_index, vertex_index, Eigen::Vector3d, float> rhs) {
-			return std::get<3>(lhs) > std::get<3>(rhs);
-		}
-	};
-
-	bool is_using_vertex_removal;
-	bool is_using_edge_collapse;
-
-	//"Loop"" subdivide & subroutines
+	//Loop subdivision
 	bool loop_subdivide();
 	std::vector<Eigen::Vector3d> compute_even_positions();
 	std::vector<Eigen::Vector3d> compute_odd_positions();
@@ -160,10 +140,28 @@ public:
 	void compute_Q_matrices(std::vector<vertex_index> vertices);
 	void compute_quadric_errors();
 	void sort_quadric_errors(); 
-	void collapse_edge_and_delete_vertex(std::tuple<vertex_index, vertex_index, Eigen::Vector3d, float>);
+	bool collapse_edge_and_delete_vertex(std::tuple<vertex_index, vertex_index, Eigen::Vector3d, double> edge_info);
 	std::map<vertex_index, Eigen::Matrix<double, 4, 4>> vertex_Q_matrices;
-	std::vector<std::tuple<vertex_index, vertex_index, Eigen::Vector3d, float>> edge_quadric_errors;
+	std::vector<std::tuple<vertex_index, vertex_index, Eigen::Vector3d, double>> edge_quadric_errors;
 	
+	bool is_using_vertex_removal;
+	bool is_using_edge_collapse;
+
+	struct ComparePair {
+		public:
+		bool operator()(std::pair<vertex_index, float> lhs, std::pair<vertex_index, float> rhs) {
+			return lhs.second > rhs.second;
+		}
+	};
+
+	struct CompareQuadrics {
+		public:
+		bool operator()(std::tuple<vertex_index, vertex_index, Eigen::Vector3d, float> lhs, 
+						std::tuple<vertex_index, vertex_index, Eigen::Vector3d, float> rhs) {
+			return std::get<3>(lhs) > std::get<3>(rhs);
+		}
+	};
+
     //general mesh-related
 	void test_mesh();
 	void print_face(face_index f);

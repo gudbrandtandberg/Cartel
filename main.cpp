@@ -419,7 +419,7 @@ int main(int argc, char *argv[]) {
      * LOAD MESH
      *********************************************/
 	// instruct the mainloop to load the mesh at the first iteration
-	mesh_curr = 2; // you can set the default model to load, or -1 for none at all.
+	mesh_curr = 10; // you can set the default model to load, or -1 for none at all.
 	c_state.op = EDIT_RELOAD;
 
     g_axis = createAxis(*r_state[1], 1);

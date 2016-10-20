@@ -1975,7 +1975,7 @@ void EditMesh::compute_quadric_errors() {
 	}
 }
 
-void EditMesh::collapse_edge_and_delete_vertex(std::tuple<vertex_index, vertex_index, Eigen::Vector3d, float> edge_info) {
+bool EditMesh::collapse_edge_and_delete_vertex(std::tuple<vertex_index, vertex_index, Eigen::Vector3d, double> edge_info) {
 	
 	vertex_index v_to_collapse = std::get<0>(edge_info);
 	vertex_index collapsed_vertex = std::get<1>(edge_info);
