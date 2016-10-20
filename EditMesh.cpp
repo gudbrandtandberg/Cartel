@@ -27,6 +27,7 @@
 #include <memory>
 #include <fstream>
 #include <string>
+#include <tuple>
 
 //#if defined(NDEBUG) && defined(ALWAYS_ASSERT)
 //#undef NDEBUG
@@ -83,6 +84,7 @@ void init_adjacency( std::size_t numVertices, const std::vector<std::size_t>& fa
 	m_heData.reserve( faces.size() ); // Assume there are 3 edges per face.
 	m_faceData.resize( faces.size() / 3 );
 	m_vertData.resize( numVertices, HOLE_INDEX ); // Init with HOLE_INDEX since a vert might be floating w/ no faces.
+	
 
 	for( std::size_t i = 0, iEnd = faces.size(); i < iEnd; i+=3 ){
 		std::size_t f[] = { faces[i], faces[i+1], faces[i+2] };
@@ -207,9 +209,17 @@ void EditMesh::init( const std::vector<double>& xyzPositions, const std::vector<
 	// HACK: This is pretty sketchy and relies on Eigen::Vector3d having the same layout as a double[3] and nothing extra or fancy alignment.
 	std::copy( xyzPositions.begin(), xyzPositions.end(), m_vertices.front().data() );
 	init_adjacency( xyzPositions.size() / 3, triangleVerts, m_heData, m_faceData, m_vertData );
-	//
+
 	vertex_angle_errors.reserve(m_vertData.size());
-	vertex_Q_matrices.reserve(m_vertData.size());
+	edge_quadric_errors.reserve(m_heData.size()/2);
+	vertex_Q_matrices = std::map<vertex_index, Eigen::Matrix<double, 4, 4>>();
+	//for (int i=0; i<m_vertData.size(); i++) {
+		//vertex_Q_matrices[i] = Eigen::Matrix<double, 4, 4>::Zero();
+		/*std::map<vertex_index, Eigen::Matrix<double, 4, 4>> set;
+		std::cout << "1" << std::endl;
+		set[2] = Eigen::Matrix<double, 4, 4>::Zero();
+		std::cout << "2" << std::endl;*/
+	//}
 }
 
 half_edge* EditMesh::find_twin( std::size_t vFrom, std::size_t vTo ){
@@ -280,6 +290,13 @@ bool EditMesh::flip_edge( half_edge &he ){
     }
 
     return true;
+}
+
+void EditMesh::delete_halfedge_my_impl(he_index he) {
+
+	m_heData[he] = m_heData.back();
+	m_heData.pop_back();
+
 }
 
 // IMPORTANT: Given a collection of half-edges to delete (ex. When removing a face we need to kill 2, 4, or 6 half-edges) they must be deleting in decreasing index order!
@@ -1154,13 +1171,18 @@ void EditMesh::get_draw_normals( float *normals ) const {
 }
 
 void EditMesh::get_draw_colors( float *colors) const {
-	//keep track of the vertex with least error, 
+	//keep track of the vertex with least error, (two vertices for edge_collapse) 
 	//as well as the 9 next vertices in the queue.
 	std::set<vertex_index> nine_last;
 	vertex_index last_vertex;
+	vertex_index last_vertex_edge_collapse = HOLE_INDEX;
 	if (is_using_edge_collapse) {
-	    for (int i = 0; i < 10; i++) {
-			;
+		size_t s = edge_quadric_errors.size();
+		last_vertex = std::get<0>(edge_quadric_errors[s-1]);
+		last_vertex_edge_collapse = std::get<1>(edge_quadric_errors[s-1]);
+	    for (int i = 2; i <= 10; i++) {
+			nine_last.insert(std::get<0>(edge_quadric_errors[s - i]));
+			nine_last.insert(std::get<1>(edge_quadric_errors[s - i]));
 	    }
 	}
 	else if (is_using_vertex_removal) {
@@ -1192,6 +1214,10 @@ void EditMesh::get_draw_colors( float *colors) const {
 				color[0] = 0.0f;
 				color[1] = 0.0f;
 				color[2] = 1.0f;
+			} else if (vert == last_vertex_edge_collapse) {
+				color[0] = 0.0f;
+				color[1] = 0.0f;
+				color[2] = 1.0f;
 			}
             // for each component of the vertex
             for( int k = 0; k < 3; ++k){
@@ -1200,6 +1226,34 @@ void EditMesh::get_draw_colors( float *colors) const {
 			he_idx = m_heData[he_idx].next;
         }
     }
+
+	//once again for the blue
+	/*for( std::size_t f = 0, iEnd = m_faceData.size(); f < iEnd; ++f ){
+		size_t he_idx = m_faceData[f];
+
+        // for each vertex of the face
+        for( int v = 0; v < 3; ++v) {
+			float color[3];
+			int vert = m_heData[he_idx].vert;
+			if (vert == last_vertex) {
+				color[0] = 0.0f;
+				color[1] = 0.0f;
+				color[2] = 1.0f;
+				for( int k = 0; k < 3; ++k){
+            		colors[3*(3*f+v) + k] = color[k];
+        		}
+			} else if (vert == last_vertex_edge_collapse) {
+				color[0] = 0.0f;
+				color[1] = 0.0f;
+				color[2] = 1.0f;
+				for( int k = 0; k < 3; ++k){
+            		colors[3*(3*f+v) + k] = color[k];
+        		}
+			}
+			he_idx = m_heData[he_idx].next;
+		}
+	}*/
+
 }
 
 void EditMesh::get_draw_selection( int *selection ) const {
@@ -1638,6 +1692,7 @@ void EditMesh::delete_vertex_impl(vertex_index v) {
 		if (m_heData[he].vert == old_last_vertex) {
 			m_heData[he].vert = v;
 		}
+		//if (m_heData[he].next == )
 	}
 }
 
@@ -1837,13 +1892,19 @@ void EditMesh::simplify_vertex_removal(int number_operations) {
 	edit_count++;
 }
 
-//TODO: modify to instead of recomputing all errors, handle three cases based on some flagging:
-void EditMesh::initialize_Q_matrices() {
+void EditMesh::compute_Q_matrices(std::vector<vertex_index> vertices) {
 	he_index current, first, next;
 	double A, B, C, D;
 
-	for (vertex_index v=0; v<m_vertData.size(); v++) {
+	if (vertices.empty()) { //first iteration only
+		int i=0;
+		while (i < m_vertData.size()) {
+			vertices.push_back(i++);
+		}
+	}
 
+	for (vertex_index v : vertices) {
+		
 		first = m_vertData[v];
 		current = first;
 		next = m_heData[m_heData[m_heData[current].next].next].twin;
@@ -1876,16 +1937,22 @@ void EditMesh::initialize_Q_matrices() {
 	}
 }
 
-void EditMesh::compute_quadric_errors() {
-	//really only needs to find the edge with the smallest associated error
+void EditMesh::sort_quadric_errors() {
+	std::sort(edge_quadric_errors.begin(), edge_quadric_errors.end(), EditMesh::CompareQuadrics());
+}
 
-	double min_error = std::numeric_limits<double>::max(), error;
+void EditMesh::compute_quadric_errors() {
+	edge_quadric_errors.clear();
 	Eigen::Matrix<double, 4, 4> Q, Q_mod;
 	Eigen::Matrix<double, 4, 1> v;
 	Eigen::Vector3d best_v;
-	vertex_index v1, v2, v1_to_collapse, v2_to_collapse;
+	vertex_index v1, v2;
+	float error;
 
-	//loop through all edges in the mesh & compute error
+	Eigen::Matrix<double, 4, 1> rhs;
+	rhs << 0, 0, 0, 1;
+
+	//loop through all edges in the mesh and compute error & vertex position
 	std::set<he_index> already_visited;
 	for (he_index he=0; he<m_heData.size(); he++) {
 		if (already_visited.find(he) != already_visited.end()) {continue;}
@@ -1894,37 +1961,50 @@ void EditMesh::compute_quadric_errors() {
 		v2 = m_heData[m_heData[he].twin].vert;
 		Q = vertex_Q_matrices[v1] + vertex_Q_matrices[v2];
 		Q_mod = Q;
-		Eigen::Matrix<double, 4, 1> rhs;
-		rhs << 0, 0, 0, 1;
 		Q_mod(3, 0) = Q_mod(3, 1) = Q_mod(3, 2) = 0;
 		Q_mod(3, 3) = 1;		
-		v = Q_mod.inverse() * rhs;
 		
+		v = Q_mod.inverse() * rhs;
+		best_v = v.block(0, 0, 3, 1);
 		error = v.transpose() * Q * v;
-		std::cout << "Error is " << error << std::endl;
-		if (error < min_error)
-		{
-		    v1_to_collapse = v1;
-		    v2_to_collapse = v2;
-		    min_error = error;
-			best_v = v.block(0, 0, 3, 1);
-		}
-		already_visited.insert(he);
+		
+		//save the edge, new v, and error
+		edge_quadric_errors.push_back(std::make_tuple(v1, v2, best_v, error));  
+		
 		already_visited.insert(m_heData[he].twin);
 	}
-
-	std::cout << "Will collapse the edge between vertices " << v1_to_collapse << " and " << v2_to_collapse << std::endl;
-	std::cout << "Associated error is " << min_error << std::endl;
-	std::cout << "New vertex position is\n" << best_v << std::endl;
-
-	// oh go on then, could just as well collapse an edge right here...
-	//new_vert should be v2_to_collapse
-	vertex_index new_vert = collapse_edge(find_edge(v1_to_collapse, v2_to_collapse)->twin);
-	set_vertex(new_vert, best_v);
-
-	//now we need to update some Q's, and think about how to continue
-
 }
+
+void EditMesh::collapse_edge_and_delete_vertex(std::tuple<vertex_index, vertex_index, Eigen::Vector3d, float> edge_info) {
+	
+	vertex_index v_to_collapse = std::get<0>(edge_info);
+	vertex_index collapsed_vertex = std::get<1>(edge_info);
+	
+	//v_to_collapse is collapsed_vertex
+	collapsed_vertex = collapse_edge(find_edge(v_to_collapse, collapsed_vertex)->twin);
+	set_vertex(collapsed_vertex, std::get<2>(edge_info));
+	delete_vertex_impl(v_to_collapse);
+	
+	//the vertex_index v_to_collapse now corresponds to the vertex we deleted,
+	vertex_Q_matrices[v_to_collapse] = vertex_Q_matrices[m_vertData.size()+1];
+	//"Q_1 = Q_1 + Q_2"
+	vertex_Q_matrices[collapsed_vertex] += vertex_Q_matrices[v_to_collapse];
+
+	//Now we need to recompute some Q matrices
+	std::vector<he_index> v_to_recompute_Q_matrices;
+	he_index first = m_vertData[collapsed_vertex];
+	he_index current = first;
+	do {
+	    v_to_recompute_Q_matrices.push_back(m_heData[m_heData[current].next].vert);
+	    current = m_heData[m_heData[m_heData[current].next].next].twin;
+	} while (current != first);
+	compute_Q_matrices(v_to_recompute_Q_matrices);
+}
+
+/*
+* main entry point for simplifying a number of edges
+*
+*/
 
 void EditMesh::simplify_edge_collapse(int number_operations) {
 	std::cout << "Will attempt to collapse " << number_operations << " vertices" << std::endl;
@@ -1933,20 +2013,24 @@ void EditMesh::simplify_edge_collapse(int number_operations) {
 		std::cout << "Cannot remove more vertices than exist in the mesh!" << std::endl;
 		return;
 	}
-	if (is_using_edge_collapse) {
+	if (is_using_vertex_removal) {
 		std::cout << "Cannot intermix edge-collapse and vertex-removal!" << std::endl;
 		return;
 	}
 
 	is_using_edge_collapse = true;
-	initialize_Q_matrices();
+	compute_Q_matrices(std::vector<vertex_index>());
 
 	int removal_counter = 0;
 	while (removal_counter < number_operations) {
 		compute_quadric_errors();
+		sort_quadric_errors();
+		collapse_edge_and_delete_vertex(edge_quadric_errors.back());
+		edge_quadric_errors.pop_back();
 		removal_counter++;
 	}
 
+	print_mesh_data("MESH AFTER REMOVAL");
 	edit_count++;
 }
 
@@ -2101,10 +2185,10 @@ void EditMesh::update_mesh(std::vector<Eigen::Vector3d> new_odd_positions) {
 			he_index origin_i = even_halfedge_indices[edge_counter];
 			if (already_split.find(origin_i) == already_split.end()) { //this edge is untouched
 				
-				Eigen::Vector3d new_vert_pos = new_odd_positions[origin_i];
-				odd_vert_indices[edge_counter] = this->add_vertex(new_vert_pos[0],
-				   											  	  new_vert_pos[1],
-															  	  new_vert_pos[2]);
+				Eigen::Vector3d v_to_collapse_pos = new_odd_positions[origin_i];
+				odd_vert_indices[edge_counter] = this->add_vertex(v_to_collapse_pos[0],
+				   											  	  v_to_collapse_pos[1],
+															  	  v_to_collapse_pos[2]);
 				new_odd_v_indices[m_heData[origin_i].twin] = odd_vert_indices[edge_counter]; //store this vertex index for twin
 
 				odd_halfedge_indices[edge_counter] = m_heData.size();

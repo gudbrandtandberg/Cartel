@@ -21,7 +21,8 @@
 #include <vector>
 #include <string>
 #include <map>
-#include <queue>
+#include <set>
+#include <tuple>
 //#define USE_PREV
 
 typedef size_t face_index;   
@@ -124,7 +125,14 @@ public:
 		bool operator()(std::pair<vertex_index, float> lhs, std::pair<vertex_index, float> rhs) {
 			return lhs.second > rhs.second;
 		}
+	};
 
+	struct CompareQuadrics {
+		public:
+		bool operator()(std::tuple<vertex_index, vertex_index, Eigen::Vector3d, float> lhs, 
+						std::tuple<vertex_index, vertex_index, Eigen::Vector3d, float> rhs) {
+			return std::get<3>(lhs) > std::get<3>(rhs);
+		}
 	};
 
 	bool is_using_vertex_removal;
@@ -144,14 +152,17 @@ public:
 	void sort_angle_errors(); 
 	std::vector<he_index> remove_vertex(vertex_index v);
 	void delete_vertex_impl(vertex_index v);
+	void delete_halfedge_my_impl(he_index he);
 	bool triangulate_hole(std::vector<he_index> boundary_halfedges);
 
 	//Edge collapse simplification
 	void simplify_edge_collapse(int number_operations); 
-	void initialize_Q_matrices();
+	void compute_Q_matrices(std::vector<vertex_index> vertices);
 	void compute_quadric_errors();
-
-	std::vector<Eigen::Matrix<double, 4, 4>> vertex_Q_matrices;
+	void sort_quadric_errors(); 
+	void collapse_edge_and_delete_vertex(std::tuple<vertex_index, vertex_index, Eigen::Vector3d, float>);
+	std::map<vertex_index, Eigen::Matrix<double, 4, 4>> vertex_Q_matrices;
+	std::vector<std::tuple<vertex_index, vertex_index, Eigen::Vector3d, float>> edge_quadric_errors;
 	
     //general mesh-related
 	void test_mesh();
