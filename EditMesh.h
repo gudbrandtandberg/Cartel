@@ -149,15 +149,15 @@ public:
 
 	struct ComparePair {
 		public:
-		bool operator()(std::pair<vertex_index, float> lhs, std::pair<vertex_index, float> rhs) {
+		bool operator()(std::pair<vertex_index, double> lhs, std::pair<vertex_index, double> rhs) {
 			return lhs.second > rhs.second;
 		}
 	};
 
 	struct CompareQuadrics {
 		public:
-		bool operator()(std::tuple<vertex_index, vertex_index, Eigen::Vector3d, float> lhs, 
-						std::tuple<vertex_index, vertex_index, Eigen::Vector3d, float> rhs) {
+		bool operator()(std::tuple<vertex_index, vertex_index, Eigen::Vector3d, double> lhs, 
+						std::tuple<vertex_index, vertex_index, Eigen::Vector3d, double> rhs) {
 			return std::get<3>(lhs) > std::get<3>(rhs);
 		}
 	};

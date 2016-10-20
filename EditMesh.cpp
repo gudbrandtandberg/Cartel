@@ -1727,8 +1727,8 @@ std::vector<he_index> EditMesh::remove_vertex(vertex_index v) {
 		current = m_heData[m_heData[boundary_he].next].twin;
 	} while (current != first);
 
-	std::cout << "Need to remove " << he_to_remove.size() << " halfedges" << std::endl;
-	std::cout << "Need to remove " << faces_to_remove.size() << " faces" << std::endl;
+	//std::cout << "Need to remove " << he_to_remove.size() << " halfedges" << std::endl;
+	//std::cout << "Need to remove " << faces_to_remove.size() << " faces" << std::endl;
 
 	//delete faces
 	std::sort(faces_to_remove.begin(), faces_to_remove.end(), std::greater<face_index>());
@@ -1759,19 +1759,6 @@ std::vector<he_index> EditMesh::remove_vertex(vertex_index v) {
 }
 
 bool EditMesh::triangulate_hole(std::vector<he_index> boundary_halfedges) {
-	/*std::cout << "Halfedges that make up the hole" << std::endl;
-	
-	for (int i=0; i<boundary_halfedges.size(); i++) {
-		std::cout << boundary_halfedges[i];
-		std::cout << "(next " << m_heData[boundary_halfedges[i]].next << ", ";
-		std::cout << "(vert " << m_heData[boundary_halfedges[i]].vert << "), ";
-	}
-
-	std::cout << std::endl;
-	std::cout << "We have a next loop!" << std::endl;*/
-
-	std::cout << "Let's fucking triangulate!" << std::endl;
-
 	he_index current;
 	vertex_index fan_base = m_heData[boundary_halfedges[0]].vert;
 	int num_new_faces = boundary_halfedges.size() - 2;
@@ -1856,32 +1843,11 @@ void EditMesh::simplify_vertex_removal(int number_operations) {
 	is_using_vertex_removal = true;
 	int removal_counter = 0;
 	while (removal_counter < number_operations) {
-		//go through vertices and compute & store the errors
 		compute_angle_errors();
-		//make sure errors are sorted
-		sort_angle_errors();
-
-		//get the index of the vertex with the least associated error		
+		sort_angle_errors();		
 		vertex_index vertex_to_remove = vertex_angle_errors.back().first;
-		/*std::cout << "Will attempt to remove vertex: " << vertex_to_remove;
-		std::cout << " (angle-error " << vertex_angle_errors.back().second << ")" << std::endl;
-		*/
-
 		std::vector<he_index> hole_edges = remove_vertex(vertex_to_remove);
 		triangulate_hole(hole_edges);
-
-		//remove the vertex and triangulate the hole
-		/*while (!remove_vertex(vertex_to_remove)) { //unable to remove the vertex with min error
-			std::cout << "Vertex cannot be removed, moving on.." << std::endl;
-			vertex_angle_errors.pop_back();
-			if (vertex_angle_errors.empty()) {
-				std::cout << "There are no more vertices feasible for removal.." << std::endl;
-				std::cout << "Only removed " << removal_counter << " vertices" << std::endl;
-				return;
-			}
-			vertex_to_remove = vertex_angle_errors.back().first; //try next vertex instead
-		}*/
-		test_mesh();
 		removal_counter++;				
 	}
 
@@ -1904,7 +1870,6 @@ void EditMesh::compute_Q_matrices(std::vector<vertex_index> vertices) {
 	}
 
 	for (vertex_index v : vertices) {
-		
 		first = m_vertData[v];
 		current = first;
 		next = m_heData[m_heData[m_heData[current].next].next].twin;
@@ -1976,11 +1941,10 @@ void EditMesh::compute_quadric_errors() {
 }
 
 bool EditMesh::collapse_edge_and_delete_vertex(std::tuple<vertex_index, vertex_index, Eigen::Vector3d, double> edge_info) {
-	
 	vertex_index v_to_collapse = std::get<0>(edge_info);
 	vertex_index collapsed_vertex = std::get<1>(edge_info);
 	
-	//v_to_collapse is collapsed_vertex
+	//will delete v_to_collapse from the mesh
 	collapsed_vertex = collapse_edge(find_edge(v_to_collapse, collapsed_vertex)->twin);
 	set_vertex(collapsed_vertex, std::get<2>(edge_info));
 	delete_vertex_impl(v_to_collapse);
@@ -1999,12 +1963,13 @@ bool EditMesh::collapse_edge_and_delete_vertex(std::tuple<vertex_index, vertex_i
 	    current = m_heData[m_heData[m_heData[current].next].next].twin;
 	} while (current != first);
 	compute_Q_matrices(v_to_recompute_Q_matrices);
+	return true;
 }
 
 /*
-* main entry point for simplifying a number of edges
-*
-*/
+ * simplify_edge_collapse(n)
+ * main entry point for edge-collapse simplification
+ */
 
 void EditMesh::simplify_edge_collapse(int number_operations) {
 	std::cout << "Will attempt to collapse " << number_operations << " vertices" << std::endl;
@@ -2039,6 +2004,7 @@ void EditMesh::print_mesh_data(std::string title) {
 		std::cout << "Vertices: " << m_vertData.size() << std::endl;
 		std::cout << "Faces: " << m_faceData.size() << std::endl;
 		std::cout << "Halfedges: " << m_heData.size() << std::endl;
+		std::cout << "\n";
 }
 
 std::vector<Eigen::Vector3d> EditMesh::compute_even_positions() {
