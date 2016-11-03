@@ -19,6 +19,7 @@
 #include "EditMesh.h"
 
 #include <Eigen/Geometry>
+
 #include <cmath>
 
 #include <map>
@@ -213,6 +214,7 @@ void EditMesh::init( const std::vector<double>& xyzPositions, const std::vector<
 	vertex_angle_errors.reserve(m_vertData.size());
 	edge_quadric_errors.reserve(m_heData.size()/2);
 	vertex_Q_matrices = std::map<vertex_index, Eigen::Matrix<double, 4, 4>>();
+	deformed_positions.reserve(m_vertData.size());
 	//for (int i=0; i<m_vertData.size(); i++) {
 		//vertex_Q_matrices[i] = Eigen::Matrix<double, 4, 4>::Zero();
 		/*std::map<vertex_index, Eigen::Matrix<double, 4, 4>> set;
@@ -1997,6 +1999,81 @@ void EditMesh::simplify_edge_collapse(int number_operations) {
 
 	print_mesh_data("MESH AFTER REMOVAL");
 	edit_count++;
+}
+
+/*
+ * Mesh deformation
+ */
+
+void EditMesh::deform_arap(std::vector<vertex_index> anchors, std::vector<vertex_index> handles) {
+	using namespace Eigen;
+	using namespace std;
+	size_t n = m_vertData.size();
+	std::cout << "Will begin arap deformation.." << std::endl;
+	Vector3d translation;
+	translation << 0, 1, 0;
+
+	//initial guess is just same as old position (+ translation for handle verts) 
+	vector<Vector3d> new_positions_initial_guess (m_vertData.size());
+	for (int i=0; i<m_vertData.size(); i++) {
+		new_positions_initial_guess[i] = get_vertex(i);
+		if (find(handles.begin(), handles.end(), i) != handles.end()) {
+			new_positions_initial_guess[i] += translation;
+		}
+	}
+
+	deformed_positions = new_positions_initial_guess;
+
+	//compute system matrix
+	SparseMatrix<double> system_matrix = compute_system_matrix();
+
+
+	edit_count++;
+}
+
+Eigen::SparseMatrix<double> EditMesh::compute_system_matrix() {
+
+	size_t n = m_vertData.size();
+	Eigen::SparseMatrix<double> system_matrix(n, n);
+
+	std::vector<Eigen::Triplet<double>> elements;
+	vertex_index i, j;
+	vvert_iterator it;
+	double value;
+	double sum_cotan_weights = 0;
+	for (i=0; i<n; i++) {
+		init_iterator(it, i);
+		do {
+			j = deref_iterator(it);
+
+			value = get_cotan_weight(it);
+			sum_cotan_weights += value;
+			elements.push_back(Eigen::Triplet<double>(i, j, -value));
+		} while (advance_iterator(it));
+
+		elements.push_back(Eigen::Triplet<double>(i, i, sum_cotan_weights));
+		sum_cotan_weights = 0;
+	}
+
+  	system_matrix.setFromTriplets(elements.begin(), elements.end());
+	return system_matrix;
+}
+
+std::vector<Eigen::Matrix<double, 3, 3>> EditMesh::compute_rotation_matrices() {
+
+	std::vector<Eigen::Matrix<double, 3, 3>> rotation_matrices (m_vertData.size());
+
+	return rotation_matrices;
+
+}
+
+void EditMesh::print_selected_verts() {
+	
+	for (vertex_index v=0; v<m_vertData.size(); v++) {
+		if (isSelected(v)) {
+			std::cout << v << std::endl;
+		}
+	}
 }
 
 void EditMesh::print_mesh_data(std::string title) {

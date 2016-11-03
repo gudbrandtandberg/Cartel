@@ -62,7 +62,9 @@ enum EDIT_OPERATION
 	EDIT_DEBUG,
     EDIT_MAX,
 	// CS 524: Add new operations here
-        EDIT_LOOP_SUBDIV
+    EDIT_LOOP_SUBDIV,
+    PRINT_SELECTED_VERTS,
+    EDIT_ARAP_DEFORM,
 };
 
 class ControlState

@@ -16,6 +16,7 @@
 #pragma once
 
 #include <Eigen/Core>
+#include <Eigen/SparseCore>
 
 #include <cstdlib>
 #include <vector>
@@ -162,7 +163,15 @@ public:
 		}
 	};
 
+	//mesh deformation stuff
+
+	void deform_arap(std::vector<vertex_index> anchors, std::vector<vertex_index> handles);
+	std::vector<Eigen::Matrix<double, 3, 3>> compute_rotation_matrices();
+	std::vector<Eigen::Vector3d> deformed_positions;
+	Eigen::SparseMatrix<double> compute_system_matrix();
+
     //general mesh-related
+	void print_selected_verts();
 	void test_mesh();
 	void print_face(face_index f);
 	void print_mesh_data(std::string title);

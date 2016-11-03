@@ -80,7 +80,7 @@ void mainloop() {
     
 	glfwPollEvents();
 
-	static bool simplify_window_open = true;
+	static bool simplify_window_open = false;
 	static int simplify_n_operations = 1;
 
 	ImGui_ImplGlfwGL3_NewFrame();
@@ -137,12 +137,11 @@ void mainloop() {
 		if (ImGui::Button("Edge Collapse Simplification")) {c_state.op = EDIT_SIMPLIFY_EDGE_COLLAPSE; }
 		ImGui::End();
 	}
-	/*ImGui::Begin("Debug Window");
-	ImGui::Text("Hello, World");
-	if (ImGui::Button("Test Button")) { printf("Clicked!\n"); }
-	static char buf1[64] = ""; 
-	ImGui::InputText("", buf1, 64);
-	ImGui::End();*/
+    
+	ImGui::Begin("Mesh Deformation");
+	if (ImGui::Button("Print Selection")) { c_state.op = PRINT_SELECTED_VERTS; }
+    if (ImGui::Button("ARAP Deform")) { c_state.op = EDIT_ARAP_DEFORM; }
+	ImGui::End();
 	
     // Clear the buffer we will draw into.
     glClearColor(0.549f, 0.47f, 0.937f, 1.0f);
@@ -184,9 +183,25 @@ void mainloop() {
 
 	case EDIT_LOOP_SUBDIV:             
 		g_mesh->get_editMesh()->loop_subdivide();
-		c_state.op = EDIT_NONE;               
+		c_state.op = EDIT_NONE;
+        break;
+    
+    case PRINT_SELECTED_VERTS:
+        g_mesh->get_editMesh()->print_selected_verts();
+        c_state.op = EDIT_NONE;
+        break;
 
+    case EDIT_ARAP_DEFORM:
+    {
+        std::vector<vertex_index> anchors = {5};
+        std::vector<vertex_index> handles = {8};
+        g_mesh->get_editMesh()->deform_arap(anchors, handles);
+		c_state.op = EDIT_NONE;
+        break;
+    }
+    
     case EDIT_NONE:
+    
     default:
         break;
     }
@@ -419,7 +434,7 @@ int main(int argc, char *argv[]) {
      * LOAD MESH
      *********************************************/
 	// instruct the mainloop to load the mesh at the first iteration
-	mesh_curr = 10; // you can set the default model to load, or -1 for none at all.
+	mesh_curr = 2; // you can set the default model to load, or -1 for none at all.
 	c_state.op = EDIT_RELOAD;
 
     g_axis = createAxis(*r_state[1], 1);
