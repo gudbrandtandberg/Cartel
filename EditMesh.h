@@ -16,7 +16,7 @@
 #pragma once
 
 #include <Eigen/Core>
-#include <Eigen/SparseCore>
+#include <Eigen/Sparse>
 
 #include <cstdlib>
 #include <vector>
@@ -164,11 +164,17 @@ public:
 	};
 
 	//mesh deformation stuff
-
-	void deform_arap(std::vector<vertex_index> anchors, std::vector<vertex_index> handles);
-	std::vector<Eigen::Matrix<double, 3, 3>> compute_rotation_matrices();
 	std::vector<Eigen::Vector3d> deformed_positions;
+	std::vector<vertex_index> handles;
+	std::vector<vertex_index> anchors;
+	Eigen::MatrixXd cotan_weights;
+	void deform_arap(int iterations, float, float, float, float);
+	std::vector<Eigen::Matrix3d> compute_rotation_matrices();
 	Eigen::SparseMatrix<double> compute_system_matrix();
+	Eigen::Matrix<double, Eigen::Dynamic, 3> compute_rhs_matrix(std::vector<Eigen::Matrix3d> rotation_matrices);
+	void compute_cotan_matrix();
+	void set_anchors();
+	void set_handles();
 
     //general mesh-related
 	void print_selected_verts();

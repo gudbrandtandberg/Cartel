@@ -62,6 +62,9 @@ int mesh_curr = -1;
 int mesh_file_size = 13; // size of the array below
 const char *mesh_files[] = {"Mesh/camel.obj",
                             "Mesh/cube.obj",
+                            "Mesh/Spiky_plane.obj",
+                            "Mesh/cuboid.obj",
+                            "Mesh/cactus.obj",
                             "Mesh/icosahedron.obj",
                             "Mesh/cow1.obj",
 							"Mesh/cow2.obj",
@@ -82,6 +85,11 @@ void mainloop() {
 
 	static bool simplify_window_open = false;
 	static int simplify_n_operations = 1;
+    static int deformation_n_iterations = 1;
+    static float trans_x;
+    static float trans_y;
+    static float trans_z;
+    static float deform_rotation;
 
 	ImGui_ImplGlfwGL3_NewFrame();
 	if (ImGui::BeginMainMenuBar()) {
@@ -137,10 +145,16 @@ void mainloop() {
 		if (ImGui::Button("Edge Collapse Simplification")) {c_state.op = EDIT_SIMPLIFY_EDGE_COLLAPSE; }
 		ImGui::End();
 	}
-    
+
 	ImGui::Begin("Mesh Deformation");
-	if (ImGui::Button("Print Selection")) { c_state.op = PRINT_SELECTED_VERTS; }
-    if (ImGui::Button("ARAP Deform")) { c_state.op = EDIT_ARAP_DEFORM; }
+    if (ImGui::Button("ARAP Deform")) { c_state.op = EDIT_ARAP_DEFORM;}
+    if (ImGui::Button("Set Anchors")) { g_mesh->get_editMesh()->set_anchors(); }
+    if (ImGui::Button("Set Handles")) { g_mesh->get_editMesh()->set_handles(); }
+    ImGui::SliderInt("it", &deformation_n_iterations, 1, 5);
+    ImGui::SliderFloat("red", &trans_x, -1.0, 1.0, "%.2f", 1.0);
+    ImGui::SliderFloat("green", &trans_y, -1.0, 1.0, "%.2f", 1.0);
+    ImGui::SliderFloat("blue", &trans_z, -1.0, 1.0, "%.2f", 1.0);
+    ImGui::SliderFloat("rot", &deform_rotation, 0.0, M_PI, "%.2f", 1.0);
 	ImGui::End();
 	
     // Clear the buffer we will draw into.
@@ -193,10 +207,9 @@ void mainloop() {
 
     case EDIT_ARAP_DEFORM:
     {
-        std::vector<vertex_index> anchors = {5};
-        std::vector<vertex_index> handles = {8};
-        g_mesh->get_editMesh()->deform_arap(anchors, handles);
+        g_mesh->get_editMesh()->deform_arap(deformation_n_iterations, trans_x, trans_y, trans_z, deform_rotation);
 		c_state.op = EDIT_NONE;
+        //c_state.arap_deform = false;
         break;
     }
     

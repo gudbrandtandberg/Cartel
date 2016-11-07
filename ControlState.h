@@ -18,6 +18,8 @@
 #define CONTROL_STATE_H
 
 #include "WorldState.h"
+#include <Eigen/Core>
+
 #include <set>
 
 /* due to GLFW/glut/most windowing systems being c based it is infeasible to store 
@@ -70,6 +72,11 @@ enum EDIT_OPERATION
 class ControlState
 {
 public:
+
+    //State stuff for setting deformation selection phases
+
+    Eigen::Vector2d deform_translation;
+
     glm::vec3 viewPan;
     float viewTheta;
     float viewPhi;

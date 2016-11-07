@@ -237,7 +237,7 @@ static void mouseBtn_callback(GLFWwindow* win, int button, int action, int mod)
             c_state.mouseBtnR = true;
             c_state.select_active = true;
         }
-        else {
+        else { // action == RELEASE
             c_state.mouseBtnR = false;
             c_state.select_active = false;
             c_state.select_dirty = true;
