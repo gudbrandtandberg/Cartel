@@ -22,6 +22,7 @@
 #include <Eigen/SVD>
 
 #include <cmath>
+#include <ctime>
 
 #include <map>
 #include <set>
@@ -2032,92 +2033,6 @@ int test_solver()
  * Mesh deformation
  */
 
- 
-void EditMesh::compute_cotan_matrix() {
-	size_t n = m_vertData.size();
-	this->cotan_weights = Eigen::MatrixXd(n, n);
-
-	vertex_index i, j;
-	for (i = 0; i < n; i++) {
-		for (j = 0; j <= i; j++) {
-			//cotan_weights(i, j) = //get_cotan_weight(it)????!!
-		}
-	}
-}
-
-void EditMesh::deform_arap(int iterations, float trans_x, float trans_y, float trans_z, float deform_rotation) {
-	//std::vector<vertex_index> anchors, std::vector<vertex_index> handles
-	using namespace Eigen;
-	using namespace std;
-
-	size_t n = m_vertData.size();
-	std::cout << "Will begin arap deformation.." << std::endl;
-
-
-	Vector3d translation;
-	translation << trans_x, trans_y, trans_z;
-
-	Matrix3d rotation_mx;
-	rotation_mx = AngleAxisd(deform_rotation, translation.normalized());
-
-	//initial guess is just same as old position (+ translation for handle verts) 
-	vector<Vector3d> new_positions_initial_guess (m_vertData.size());
-	for (int i=0; i<m_vertData.size(); i++) {
-		new_positions_initial_guess[i] = get_vertex(i);
-		if (find(handles.begin(), handles.end(), i) != handles.end()) {
-			new_positions_initial_guess[i] = rotation_mx*new_positions_initial_guess[i]+translation;
-		}
-	}
-
-	this->deformed_positions = new_positions_initial_guess;
-
-	//compute system matrix
-	SparseMatrix<double> system_matrix = compute_system_matrix();
-
-	//set up solver
-	SparseLU<SparseMatrix<double>> sparse_solver(system_matrix);
-	sparse_solver.factorize(system_matrix);
-	
-
-	MatrixXd new_positions;
-	//SimplicialLDLT<SparseMatrix<double>> sparse_solver(system_matrix);
-	//these two lines of LU work, Cholesky does not.. ^
-	int it = 0;
-	while (it < iterations) {
-
-		//compute rotation matrices
-		vector<Matrix3d> rotation_matrices = compute_rotation_matrices();
-
-		/*	for (int i=0; i < rotation_matrices.size(); i++) {
-				cout << rotation_matrices[i] << endl;
-			}
-		*/
-
-		//compute rhs
-		Matrix<double, Dynamic, 3> rhs = compute_rhs_matrix(rotation_matrices); 
-
-		//solve system
-		new_positions = sparse_solver.solve(rhs);
-
-		//set deformed positions (used by compute_rotation_matrices)
-		for (int i=0; i<m_vertData.size(); i++) {
-			deformed_positions[i] = new_positions.row(i).transpose();
-		}
-		it++;
-	}
-
-	//set new vertex positions
-	for (vertex_index v=0; v<n; v++) {
-		set_vertex(v, new_positions.row(v).transpose());
-	}	
-
-	//test solution
-	/*cout << system_matrix * new_positions << endl;
-	cout << "===================================" << endl;
-	cout << rhs << endl;*/
-
-	edit_count++;
-}
 
 void EditMesh::set_anchors() {
 	std::cout << "setting anchors" << std::endl;
@@ -2151,6 +2066,118 @@ void EditMesh::set_handles() {
 	this->deselect_allVerts();
 }
 
+void EditMesh::compute_cotan_matrix() {
+	using namespace Eigen;
+	using namespace std;
+
+	size_t n = m_vertData.size();
+	this->cotan_weights = SparseMatrix<double, RowMajor>(n, n);
+
+	vector<Triplet<double>> weights;
+
+	vertex_index i, j;
+	vvert_iterator it;
+	double weight, sum_weights = 0;
+	vector<double> cotan_sums(n);
+
+	for (i = 0; i < n; i++) {
+		init_iterator(it, i);
+		do {
+			j = (*it.m_cur).vert;
+			weight = get_cotan_weight(it);
+			cotan_sums[i] += weight;
+			weights.push_back(Triplet<double>(i, j, weight));
+		} while (advance_iterator(it));
+	}
+
+	cotan_weights.setFromTriplets(weights.begin(), weights.end());
+
+	//normalize
+	for (int i=0; i<n; i++) {
+		cotan_weights.row(i) /= cotan_sums[i];
+	}
+}
+
+void EditMesh::deform_arap(int iterations, float trans_x, float trans_y, float trans_z, float deform_rotation) {
+	using namespace Eigen;
+	using namespace std;
+
+	size_t n = m_vertData.size();
+	std::cout << "Will begin arap deformation.." << std::endl;
+	clock_t start = clock();
+
+	//extract translation & rotation info
+	Vector3d translation;
+	translation << trans_x, trans_y, trans_z;
+
+	Matrix3d rotation_mx;
+	rotation_mx = AngleAxisd(deform_rotation, translation.normalized());
+
+	//initial guess is just same as old position (*rot +trans for handle verts) 
+	vector<Vector3d> new_positions_initial_guess (m_vertData.size()); //unnecessary??
+	for (int i=0; i<m_vertData.size(); i++) {
+		deformed_positions[i] = get_vertex(i);
+		if (find(handles.begin(), handles.end(), i) != handles.end()) {
+			deformed_positions[i] = rotation_mx*deformed_positions[i]+translation;
+		}
+	}
+
+	this->deformed_positions = new_positions_initial_guess;
+
+	//compute normalized cotangent weight matrix
+	compute_cotan_matrix();
+
+	//compute system matrix
+	SparseMatrix<double> system_matrix = compute_system_matrix();
+
+	//set up solver
+	SparseLU<SparseMatrix<double>> sparse_solver(system_matrix);
+	sparse_solver.factorize(system_matrix);
+	//cout << system_matrix << endl;
+	MatrixXd new_positions;
+	//SimplicialLDLT<SparseMatrix<double>> sparse_solver(system_matrix);
+	//these two lines of LU work, Cholesky does not.. ^
+	int it = 0;
+	while (it < iterations) {
+
+		//compute rotation matrices
+		vector<Matrix3d> rotation_matrices = compute_rotation_matrices();
+
+		/*	for (int i=0; i < rotatigion_matrices.size(); i++) {
+				cout << rotation_matrices[i] << endl;
+			}
+		*/
+
+		//compute rhs
+		Matrix<double, Dynamic, 3> rhs = compute_rhs_matrix(rotation_matrices); 
+		
+		//solve system
+		new_positions = sparse_solver.solve(rhs);
+
+		//set deformed positions (used by compute_rotation_matrices)
+		for (int i=0; i<m_vertData.size(); i++) {
+			deformed_positions[i] = new_positions.row(i).transpose();
+		}
+		it++;
+	}
+
+	//set new vertex positions
+	for (vertex_index v=0; v<n; v++) {
+		set_vertex(v, new_positions.row(v).transpose());
+	}	
+
+	//test solution
+	/*cout << system_matrix * new_positions << endl;
+	cout << "===================================" << endl;
+	cout << rhs << endl;*/
+
+	clock_t stop = clock();
+	double time = (double) (stop-start) / CLOCKS_PER_SEC * 1000.0;
+	cout << "Deformed mesh in " << time << " seconds. " << endl;
+
+	edit_count++;
+}
+
 Eigen::Matrix<double, Eigen::Dynamic, 3> EditMesh::compute_rhs_matrix(std::vector<Eigen::Matrix3d> rotation_matrices) {
 	using namespace Eigen;
 	using namespace std;
@@ -2164,9 +2191,8 @@ Eigen::Matrix<double, Eigen::Dynamic, 3> EditMesh::compute_rhs_matrix(std::vecto
 	Matrix3d R_i;
 	Vector3d rhs_row_i, center_vert;
 	vertex_index i, j;
-	vvert_iterator it;
-	for (i=0; i<n; i++) {
 
+	for (i=0; i<n; i++) {
 		//check if row i is a handle or anchor row
 		if (find(handles.begin(), handles.end(), i) != handles.end() ||
 			find(anchors.begin(), anchors.end(), i) != anchors.end()) {			
@@ -2174,16 +2200,14 @@ Eigen::Matrix<double, Eigen::Dynamic, 3> EditMesh::compute_rhs_matrix(std::vecto
 			rhs_row_i = deformed_positions[i];
 		
 		} else {
-			init_iterator(it, i);
 			R_i = rotation_matrices[i];
 			center_vert = get_vertex(i);
 			rhs_row_i = Vector3d::Zero();
-			do {
-				j = deref_iterator(it);
-				w_ij = get_cotan_weight(it);
+			for (SparseMatrix<double, RowMajor>::InnerIterator itr(cotan_weights,i); itr; ++itr) {
+				j = itr.col();
+				w_ij = itr.value();
 				rhs_row_i += (w_ij / 2) * (R_i + rotation_matrices[j]) * (center_vert - get_vertex(j));
-				
-			} while (advance_iterator(it));
+			}
 		}
 
 		rhs.row(i) = rhs_row_i.transpose();
@@ -2193,9 +2217,11 @@ Eigen::Matrix<double, Eigen::Dynamic, 3> EditMesh::compute_rhs_matrix(std::vecto
 }
 
 Eigen::SparseMatrix<double> EditMesh::compute_system_matrix() {
+	using namespace std;
+	using namespace Eigen;
 
 	size_t n = m_vertData.size();
-	Eigen::SparseMatrix<double> system_matrix(n, n);
+	SparseMatrix<double> system_matrix(n, n);
 
 	std::vector<Eigen::Triplet<double>> elements;
 	vertex_index i, j;
@@ -2203,27 +2229,23 @@ Eigen::SparseMatrix<double> EditMesh::compute_system_matrix() {
 	double value;
 	double sum_cotan_weights = 0;
 	for (i=0; i<n; i++) {
-
-		//check if row i is a handle or anchor row
 		if (find(handles.begin(), handles.end(), i) != handles.end() ||
-			find(anchors.begin(), anchors.end(), i) != anchors.end()) {			
+			find(anchors.begin(), anchors.end(), i) != anchors.end()) {
+				
+				;		
 			
-			elements.push_back(Eigen::Triplet<double>(i, i, 1.0));
-		
 		} else {
-
-			init_iterator(it, i);
-			do {
-				j = deref_iterator(it);
-
-				value = get_cotan_weight(it);
-				sum_cotan_weights += value;
-				elements.push_back(Eigen::Triplet<double>(i, j, -value));
-			} while (advance_iterator(it));
-
-			elements.push_back(Eigen::Triplet<double>(i, i, sum_cotan_weights));
+			//iterate through 1-ring weights
+			for (SparseMatrix<double, RowMajor>::InnerIterator itr(cotan_weights,i); itr; ++itr) {
+				j = itr.col();
+				sum_cotan_weights += itr.value();
+				elements.push_back(Triplet<double>(i, j, -itr.value()));
+			}
 			sum_cotan_weights = 0;
+			
 		}
+		elements.push_back(Triplet<double>(i, i, 1.0));
+		
 	}
 
   	system_matrix.setFromTriplets(elements.begin(), elements.end());
@@ -2243,32 +2265,27 @@ std::vector<Eigen::Matrix3d> EditMesh::compute_rotation_matrices() {
 	Vector3d e_ij; 
 	Vector3d ep_ij;  //"e-prime_ij"
 	for (i=0; i<m_vertData.size(); i++) {
-		
 		S = Matrix3d::Zero();
-		init_iterator(it, i);
-		do {
-			j = deref_iterator(it);
-
-			w_ij = get_cotan_weight(it);
-
+		for (SparseMatrix<double, RowMajor>::InnerIterator itr(cotan_weights, i); itr; ++itr) {
+			j = itr.col();
+			
+			w_ij = itr.value();
 			e_ij = get_vertex(i) - get_vertex(j);
 			ep_ij = deformed_positions[i] - deformed_positions[j];
 
 			S += w_ij * (e_ij * ep_ij.transpose());
-		} while (advance_iterator(it));
+		}
 
 		//S_i is now set up, compute SVD
 		JacobiSVD<Matrix3d> svd(S, ComputeFullU | ComputeFullV);
 		rotation_matrices[i] = svd.matrixV() * svd.matrixU().transpose();
 
+		//take care of negative determinant
 		if (rotation_matrices[i].determinant() <= 0) {
 			Matrix3d U = svd.matrixU();
 			U.row(0) = - U.row(0);
 			rotation_matrices[i] = svd.matrixV() * U.transpose();
 			
-		}
-		if (rotation_matrices[i].determinant() <= 0) {
-			std::cout << "eh!, we have a non-positive determinant!" << endl;
 		}
 	}
 
