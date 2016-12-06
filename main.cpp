@@ -72,7 +72,6 @@ const char *mesh_files[] = {"Mesh/camel.obj",
 							"Mesh/horse.obj",
 							"Mesh/octopus.obj",
                             "Mesh/tetrahedron.obj",
-                            "Mesh/diamond.obj",
                             "Mesh/rabbit.obj",
                             "Mesh/diamond.obj",
                             "Mesh/humanoid.obj",};
@@ -150,7 +149,7 @@ void mainloop() {
     if (ImGui::Button("ARAP Deform")) { c_state.op = EDIT_ARAP_DEFORM;}
     if (ImGui::Button("Set Anchors")) { g_mesh->get_editMesh()->set_anchors(); }
     if (ImGui::Button("Set Handles")) { g_mesh->get_editMesh()->set_handles(); }
-    ImGui::SliderInt("it", &deformation_n_iterations, 1, 5);
+    ImGui::SliderInt("it", &deformation_n_iterations, 1, 10);
     ImGui::SliderFloat("red", &trans_x, -1.0, 1.0, "%.2f", 1.0);
     ImGui::SliderFloat("green", &trans_y, -1.0, 1.0, "%.2f", 1.0);
     ImGui::SliderFloat("blue", &trans_z, -1.0, 1.0, "%.2f", 1.0);

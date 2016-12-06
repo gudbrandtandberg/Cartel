@@ -163,11 +163,13 @@ public:
 		}
 	};
 
+	//Assignment 3:
 	//mesh deformation stuff
 	std::vector<Eigen::Vector3d> deformed_positions;
 	std::vector<vertex_index> handles;
 	std::vector<vertex_index> anchors;
 	Eigen::SparseMatrix<double, Eigen::RowMajor> cotan_weights;
+	
 	void deform_arap(int iterations, float, float, float, float);
 	std::vector<Eigen::Matrix3d> compute_rotation_matrices();
 	Eigen::SparseMatrix<double> compute_system_matrix();
